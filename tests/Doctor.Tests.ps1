@@ -103,6 +103,26 @@ Describe 'Invoke-TaskctlDoctor' {
         }
     }
 
+    Context '終了コード 3（重大な問題）' {
+        BeforeAll {
+            # SCHED_E_SERVICE_NOT_RUNNING (0x80041315) は registry で severity: error
+            $acq = New-Acquired -Fixture 'normal.xml' -Name 'ErrorTask' -LastTaskResult -2147216619
+            Mock -ModuleName Taskctl Get-TaskctlTask { $acq }.GetNewClosure()
+        }
+
+        It 'error の結果コードで終了コード 3 を返す' {
+            $out = Invoke-TaskctlDoctor -Lang ja
+            $out | Should -Match 'SCHED_E_SERVICE_NOT_RUNNING'
+            Get-TaskctlExitCode | Should -Be 3
+        }
+
+        It '--json の exit_code も 3' {
+            $j = Invoke-TaskctlDoctor -Lang ja -Json | ConvertFrom-Json
+            $j.exit_code | Should -Be 3
+            $j.summary.errors | Should -Be 1
+        }
+    }
+
     Context '成功タスク（問題なし）' {
         BeforeAll {
             $acq = New-Acquired -Fixture 'normal.xml' -Name 'HealthyTask' -LastTaskResult 0
