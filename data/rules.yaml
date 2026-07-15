@@ -98,13 +98,15 @@ rules:
       - { fact: action.command_relative, eq: true }
       - { fact: action.working_directory_set, eq: false }
 
+# 存在チェックは taskctl の実行文脈で行うため、実行ユーザーが本人のタスクに限る。
+  # 他ユーザー / SYSTEM のタスクでは、本人に読めないだけのパスを「無い」と誤検知するため。
+  # 本人のタスクでも文脈は完全一致しないので、error にはせず「調査」に留める。
   - id: command_not_found
     scope: action
     severity: warning
     rank: investigate
     when:
-      # 絶対パスかつ環境変数を含まない場合のみ検査する。
-      # それでも「taskctl の文脈で見えないだけ」がありうるので error にはしない。
+      - { fact: principal.is_current_user, eq: true }
       - { fact: action.command_checkable, eq: true }
       - { fact: action.command_exists, eq: false }
 
@@ -113,6 +115,7 @@ rules:
     severity: warning
     rank: investigate
     when:
+      - { fact: principal.is_current_user, eq: true }
       - { fact: action.working_directory_checkable, eq: true }
       - { fact: action.working_directory_exists, eq: false }
 

@@ -461,9 +461,12 @@ fallback:
       (For example, 0x80070002 is win32=2, "The system cannot find the file specified.")
   unknown:
     meaning: |
-      This result code is not in the translation table. It may be a program-specific exit code.
-    cause: Cannot be determined. Check the documentation of the program being run.
+      This result code is not in the translation table. Its meaning cannot be determined,
+      but since it is non-zero it is treated as a failure. It may be a program-specific exit code.
+    cause: Cannot be determined from the code alone. It depends on the program being run.
     next: |
       Run the action's command directly and check the program's own documentation or
       logs for the meaning of this exit code:
         {{snippets.test_action_standalone}}
+      Also check what Task Scheduler recorded:
+        {{snippets.operational_log}}

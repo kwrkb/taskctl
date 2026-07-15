@@ -337,6 +337,11 @@ fallback:
     match: "0x8007----"
     extract: win32_low16
     rank: investigate
-  # それ以外の未知コード: 断定せず、16進と10進(符号付き/符号なし両方)を提示して「不明」と表示
+    severity: warning
+  # それ以外の未知コード: 断定せず、16進と10進(符号付き/符号なし両方)を提示して「不明」と表示。
+  # ただし「意味を断定しない」ことと「失敗を隠す」ことは別。非ゼロの結果は失敗として扱い、
+  # 調査を促す（severity: warning / rank: investigate）。0 は S_OK としてレジストリにあるため、
+  # ここへ来る未知コードは実際には非ゼロのみ。
   unknown:
-    rank: info
+    rank: investigate
+    severity: warning

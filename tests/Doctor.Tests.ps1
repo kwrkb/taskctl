@@ -74,6 +74,35 @@ Describe 'Invoke-TaskctlDoctor' {
         }
     }
 
+    Context '未知の非ゼロ結果コード（失敗を緑で返さない）' {
+        BeforeAll {
+            # 0x00002EE7 は翻訳表に無い。実機で ViGEmBus_Updater が返していた実際の値。
+            $acq = New-Acquired -Fixture 'normal.xml' -Name 'UnknownFail' -LastTaskResult 12007
+            Mock -ModuleName Taskctl Get-TaskctlTask { $acq }.GetNewClosure()
+        }
+
+        It '終了コード 2 を返す（未知でも失敗は失敗）' {
+            Invoke-TaskctlDoctor -Lang ja | Out-Null
+            Get-TaskctlExitCode | Should -Be 2
+        }
+
+        It '走査時の詳細に出る（一覧に埋もれさせない）' {
+            $out = Invoke-TaskctlDoctor -Lang ja
+            $out | Should -Match 'UnknownFail'
+            $out | Should -Match '0x00002EE7'
+            $out | Should -Match '翻訳表に無い'
+            $out | Should -Match '次の一手 \[調査\]'
+        }
+
+        It '--json で is_failure と severity が整合する' {
+            $j = Invoke-TaskctlDoctor -Lang ja -Json | ConvertFrom-Json
+            $j.exit_code | Should -Be 2
+            $j.tasks[0].last_result.is_failure | Should -BeTrue
+            $j.tasks[0].last_result.severity | Should -Be 'warning'
+            $j.tasks[0].last_result.known | Should -BeFalse
+        }
+    }
+
     Context '成功タスク（問題なし）' {
         BeforeAll {
             $acq = New-Acquired -Fixture 'normal.xml' -Name 'HealthyTask' -LastTaskResult 0

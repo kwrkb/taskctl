@@ -15,7 +15,11 @@ function Get-TaskctlTaskFact {
 
         [object] $Info,
 
-        [datetime] $Now = (Get-Date)
+        [datetime] $Now = (Get-Date),
+
+        # taskctl を動かしている本人の識別子（テストで注入）
+        [string] $CurrentSid,
+        [string] $CurrentName
     )
 
     $facts = @{}
@@ -61,12 +65,19 @@ function Get-TaskctlTaskFact {
     # ---- principal.* ----
     $facts['principal.is_service_account'] = $false
     $facts['principal.logon_type_interactive'] = $false
+    $facts['principal.is_current_user'] = $false
     if ($Model.Principal) {
         $userId = [string] $Model.Principal.UserId
         $facts['principal.is_service_account'] =
             $userId -in 'S-1-5-18', 'S-1-5-19', 'S-1-5-20' -or
             $userId -match '^(NT AUTHORITY\\)?(SYSTEM|LOCAL SERVICE|NETWORK SERVICE)$'
         $facts['principal.logon_type_interactive'] = $Model.Principal.LogonType -eq 'InteractiveToken'
+        # taskctl を動かしている本人のタスクか。本人のタスクに限れば、taskctl の文脈での
+        # パス存在チェックは「タスクが走る文脈」とほぼ一致し、Test-Path の結果を信頼できる。
+        $currentUserArgs = @{ UserId = $userId }
+        if ($CurrentSid) { $currentUserArgs['CurrentSid'] = $CurrentSid }
+        if ($CurrentName) { $currentUserArgs['CurrentName'] = $CurrentName }
+        $facts['principal.is_current_user'] = Test-TaskctlCurrentUser @currentUserArgs
     }
 
     # ---- settings.* ----
@@ -170,6 +181,46 @@ function Get-TaskctlActionFact {
     $facts['action.command_is_unlaunchable_script'] = $ext -in '.ps1', '.psm1', '.sh'
 
     $facts
+}
+
+<#
+.SYNOPSIS
+    タスクの実行ユーザーが、taskctl を動かしている本人かを判定する。
+.DESCRIPTION
+    UserId は SID（S-1-5-21-...）でもアカウント名（DOMAIN\user）でも入りうるため両方見る。
+    判定できない場合は $false（＝存在チェックを走らせない側に倒す）。
+#>
+function Test-TaskctlCurrentUser {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [string] $UserId,
+
+        [string] $CurrentSid = $script:TaskctlCurrentSid,
+        [string] $CurrentName = $script:TaskctlCurrentName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($UserId)) { return $false }
+
+    if (-not $CurrentSid -or -not $CurrentName) {
+        try {
+            $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+            $script:TaskctlCurrentSid = $identity.User.Value
+            $script:TaskctlCurrentName = $identity.Name
+            $CurrentSid = $script:TaskctlCurrentSid
+            $CurrentName = $script:TaskctlCurrentName
+        }
+        catch {
+            Write-Verbose "現在のユーザーを判定できません: $_"
+            return $false
+        }
+    }
+
+    $id = $UserId.Trim()
+    if ($id -eq $CurrentSid) { return $true }
+    if ($id -eq $CurrentName) { return $true }
+    # ドメイン修飾なしのアカウント名（"kiwar" と "HOST\user"）
+    ($id -notmatch '^S-1-' -and $id -eq (Split-Path $CurrentName -Leaf))
 }
 
 function Get-TaskctlFixedDrive {

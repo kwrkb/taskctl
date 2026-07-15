@@ -54,7 +54,7 @@ function Resolve-TaskctlResultCode {
             Signed      = $normalized.Signed
             Constant    = "HRESULT_FROM_WIN32($win32)"
             Kind        = 'system'
-            Severity    = 'warning'
+            Severity    = $registry.fallback.hresult_from_win32.severity
             IsFailure   = $true
             Rank        = $registry.fallback.hresult_from_win32.rank
             MessageKey  = 'fallback.hresult_from_win32'
@@ -66,6 +66,11 @@ function Resolve-TaskctlResultCode {
         }
     }
     else {
+        # 未知のコード。意味は断定しないが、失敗を隠さない。
+        # 非ゼロ = 失敗として扱い、severity/rank も失敗に整合させる（調査を促す）。
+        # ここで notice/info にすると、doctor の詳細にも出ず終了コードも 0 になり、
+        # 「未知の失敗を緑で返す」ことになってツールの存在意義を損なう。
+        $isFailure = ($normalized.Unsigned -ne 0)
         $prose = $catalog.fallback.unknown
         $finding = [PSCustomObject]@{
             Code        = $normalized.Key
@@ -73,9 +78,9 @@ function Resolve-TaskctlResultCode {
             Signed      = $normalized.Signed
             Constant    = $null
             Kind        = 'app'      # 未知のコードはアプリ独自の終了コードの可能性が高い
-            Severity    = 'notice'
-            IsFailure   = ($normalized.Unsigned -ne 0)
-            Rank        = $registry.fallback.unknown.rank
+            Severity    = if ($isFailure) { $registry.fallback.unknown.severity } else { 'info' }
+            IsFailure   = $isFailure
+            Rank        = if ($isFailure) { $registry.fallback.unknown.rank } else { 'info' }
             MessageKey  = 'fallback.unknown'
             Meaning     = $prose.meaning
             Cause       = $prose.cause

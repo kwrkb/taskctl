@@ -125,6 +125,32 @@ Describe 'Invoke-TaskctlExplain' {
                 $j.action | Should -Not -BeNullOrEmpty
             }
         }
+
+        It '未知の非ゼロコードは失敗として扱い、severity / rank も失敗に整合させる' {
+            # 意味を断定しないことと、失敗を隠すことは別。
+            # notice/info にすると doctor の詳細に出ず終了コードも 0 になり、
+            # 「未知の失敗を緑で返す」ことになる。
+            foreach ($code in '0x63', '0x00002EE7', '0x8004EE04', '0x40010004') {
+                $j = Invoke-TaskctlExplain $code -Lang ja -Json | ConvertFrom-Json
+                $j.is_failure | Should -BeTrue -Because "$code は非ゼロ"
+                $j.severity | Should -Be 'warning' -Because "$code は未知の失敗"
+                $j.rank | Should -Be 'investigate' -Because "$code は断定できないので調査"
+                $j.known | Should -BeFalse
+            }
+        }
+
+        It '未知コードの表示ランクが「調査」になる（本文と見出しが矛盾しない）' {
+            $out = Invoke-TaskctlExplain '0x63' -Lang ja
+            $out | Should -Match '次の一手 \[調査\]'
+            $out | Should -Not -Match '次の一手 \[情報\]'
+        }
+
+        It '0x8007xxxx フォールバックも warning / investigate' {
+            $j = Invoke-TaskctlExplain '0x80070002' -Lang ja -Json | ConvertFrom-Json
+            $j.is_failure | Should -BeTrue
+            $j.severity | Should -Be 'warning'
+            $j.rank | Should -Be 'investigate'
+        }
     }
 
     Context '--json（機械可読の契約）' {
