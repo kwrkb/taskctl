@@ -319,6 +319,26 @@ codes:
       The original message text is also available via:
         net helpmsg 4320
 
+  "0x80070002":
+    meaning: |
+      A Windows system error whose low 16 bits are Win32 error 2
+      (ERROR_FILE_NOT_FOUND), "The system cannot find the file specified."
+      The 0x8007---- shape itself marks this as a Windows system error, so unlike a bare
+      0x00000002, it is unlikely to be a program's own exit code.
+    cause: |
+      The action's path, or a file it needs, may not exist. Alternatively it may not
+      resolve from the task's run-time context (a different user, a mapped drive).
+    next: |
+      First check that the path resolves in the task's run-as user context.
+      An .exe on a network share often fails when only the run-as account lacks access.
+      Official workaround: launch via cmd instead of calling it directly
+        cmd /c \\server\share\app.exe
+      or grant the run-as account access to the share.
+      Running it directly also helps isolate the problem:
+        {{snippets.test_action_standalone}}
+      The original message text is also available via:
+        net helpmsg 2
+
   "0x80070032":
     meaning: |
       A Windows system error whose low 16 bits are Win32 error 50
@@ -541,10 +561,11 @@ fallback:
       This code is a Windows Win32 error wrapped in an HRESULT (0x8007xxxx).
       Its low 16 bits are the Win32 error code.
     cause: This is a generic Windows error, so the cause cannot be determined from the code alone.
+    # Do not cite a specific code as an example: the moment that code is added to the
+    # translation table, this would be citing a code that never reaches the fallback.
     next: |
       The Win32 error number for this code is {{win32}}. Look up its meaning with:
         net helpmsg {{win32}}
-      (For example, 0x80070002 is win32=2, "The system cannot find the file specified.")
   unknown:
     meaning: |
       This result code is not in the translation table. Its meaning cannot be determined,

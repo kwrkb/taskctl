@@ -160,10 +160,17 @@ Describe 'Invoke-TaskctlExplain' {
     }
 
     Context 'フォールバック（表に無いコード。断定しない）' {
+        # 検証には「レジストリに無い 0x8007xxxx」を使う。表に載っているコードを使うと
+        # 完全一致が先に当たり、fallback 経路を素通りしたままテストが緑になる（実際に踏んだ）。
+        It 'フォールバック検証用のコードがレジストリに無いことを確かめる' {
+            $registryKeys = InModuleScope Taskctl { @((Get-TaskctlRegistry).codes.key) }
+            $registryKeys | Should -Not -Contain '0x80070057' -Because 'このテストは fallback 経路を検証している。表に載せるなら別の未登録コードへ差し替える'
+        }
+
         It '0x8007xxxx は Win32 エラーとして net helpmsg を案内する' {
-            $out = Invoke-TaskctlExplain '0x80070002' -Lang ja
-            $out | Should -Match 'net helpmsg 2'       # 下位16bit を10進で注入
-            $out | Should -Match 'HRESULT_FROM_WIN32\(2\)'
+            $out = Invoke-TaskctlExplain '0x80070057' -Lang ja
+            $out | Should -Match 'net helpmsg 87'      # 下位16bit を10進で注入
+            $out | Should -Match 'HRESULT_FROM_WIN32\(87\)'
         }
 
         It '未知のコードは「不明」とし、16進と10進を示す' {
@@ -202,7 +209,7 @@ Describe 'Invoke-TaskctlExplain' {
         }
 
         It '0x8007xxxx フォールバックも warning / investigate' {
-            $j = Invoke-TaskctlExplain '0x80070002' -Lang ja -Json | ConvertFrom-Json
+            $j = Invoke-TaskctlExplain '0x80070057' -Lang ja -Json | ConvertFrom-Json
             $j.is_failure | Should -BeTrue
             $j.severity | Should -Be 'warning'
             $j.rank | Should -Be 'investigate'
