@@ -326,6 +326,42 @@ Describe 'Invoke-TaskctlDoctor' {
         }
     }
 
+    Context 'タスク名の解決（取得層）' {
+        BeforeAll {
+            # Get-ScheduledTask を差し替え、-TaskName がワイルドカードとして解釈される挙動を再現する
+            Mock -ModuleName Taskctl Get-ScheduledTask {
+                $all = @(
+                    [PSCustomObject]@{ TaskName = 'a[b'; TaskPath = '\'; State = 'Ready' }
+                    [PSCustomObject]@{ TaskName = 'Plain'; TaskPath = '\'; State = 'Ready' }
+                )
+                if ($TaskName) {
+                    # 実物と同じく、不正なワイルドカードパターンなら throw する
+                    if ($TaskName -match '\[') { throw 'The specified wildcard character pattern is not valid: ' + $TaskName }
+                    return @($all | Where-Object { $_.TaskName -like $TaskName })
+                }
+                $all
+            }
+            Mock -ModuleName Taskctl Export-ScheduledTask { Get-Content (Join-Path $script:fixtureDir 'normal.xml') -Raw }
+            Mock -ModuleName Taskctl Get-ScheduledTaskInfo {
+                [PSCustomObject]@{ LastRunTime = [datetime]'2026-07-15T02:00:00'; LastTaskResult = 0
+                    NextRunTime = [datetime]'2026-07-16T02:00:00'; NumberOfMissedRuns = 0 }
+            }
+        }
+
+        It '"[" を含むタスク名でも解決できる（ワイルドカード不正で落ちない）' {
+            # タスク名に "[" は使える。-TaskName はワイルドカードとして解釈するため、
+            # そのまま渡すと .NET の内部例外が漏れていた。
+            $r = @(InModuleScope Taskctl { Get-TaskctlTask -TaskName 'a[b' })
+            $r.Count | Should -Be 1
+            $r[0].TaskName | Should -Be 'a[b'
+        }
+
+        It '存在しないタスクは分かりやすく throw する' {
+            { InModuleScope Taskctl { Get-TaskctlTask -TaskName 'NoSuchTask' } } |
+                Should -Throw '*タスクが見つかりません*'
+        }
+    }
+
     Context 'taskctl ディスパッチャ経由' {
         BeforeAll {
             $acq = New-Acquired -Fixture 'normal.xml' -Name 'DispatchTask' -LastTaskResult 0

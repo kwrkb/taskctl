@@ -1,6 +1,6 @@
 @{
     RootModule        = 'Taskctl.psm1'
-    ModuleVersion     = '1.0.2'
+    ModuleVersion     = '1.0.3'
     GUID              = '398ccab1-b7c5-46e9-9bb7-85d619b21780'
     Author            = 'kwrkb'
     Description       = 'Diagnose why Windows scheduled tasks fail (or are likely to) and show the concrete next step. Read-only; never modifies task settings.'

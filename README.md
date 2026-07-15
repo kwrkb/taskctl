@@ -67,6 +67,9 @@ taskctl explain <code>      # 結果コード単体を翻訳（例: taskctl expl
 `explain` は 16進 (`0x41303`) / 10進 (`267011`) / 符号付き10進 (`-2147024891`) のいずれも受け付けます。
 `LastTaskResult` は符号付き 32bit で返るため、そのまま貼り付けて構いません。
 
+`doctor <task>` のタスク指定は、名前 (`MyBackup`)、フォルダ付き (`\Foo\MyBackup`)、
+ワイルドカード (`Omen*` — 一致した全部を深掘り) が使えます。
+
 PowerShell 流に呼びたい場合は `Invoke-TaskctlDoctor` / `Invoke-TaskctlExplain` を直接使えます
 （`taskctl doctor --lang en` ≡ `Invoke-TaskctlDoctor -Lang en`）。
 
