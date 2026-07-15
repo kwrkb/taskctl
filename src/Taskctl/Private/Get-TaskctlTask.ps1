@@ -19,7 +19,16 @@ function Get-TaskctlTask {
     $tasks = if ($TaskName) {
         # ユーザーは "\Foo\Bar" でも "Bar" でも指定しうる
         $leaf = Split-Path $TaskName -Leaf
-        $found = @(Get-ScheduledTask -TaskName $leaf -ErrorAction SilentlyContinue)
+        # Get-ScheduledTask -TaskName はワイルドカードとして解釈する。タスク名に使える
+        # "[" などが入ると「不正なパターン」で throw するため、その場合はリテラル名として探す。
+        $found = @()
+        try {
+            $found = @(Get-ScheduledTask -TaskName $leaf -ErrorAction SilentlyContinue)
+        }
+        catch {
+            Write-Verbose "ワイルドカードとして解釈できないためリテラル名で検索します: $leaf"
+            $found = @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -eq $leaf })
+        }
         if ($TaskName -match '[\\/]') {
             $wanted = '\' + $TaskName.Trim('\', '/')
             $found = @($found | Where-Object { ($_.TaskPath + $_.TaskName).TrimEnd('\') -eq $wanted })
