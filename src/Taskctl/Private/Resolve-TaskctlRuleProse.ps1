@@ -23,7 +23,14 @@ function Resolve-TaskctlRuleProse {
         # 実値が無い場合の既定。<...> 表記は非翻訳で、「ここに自分の値を入れる」ことが
         # 日英どちらでも分かる。空文字は絶対に出さない。
         $values = @{} + $(if ($Finding.Values) { $Finding.Values } else { @{} })
-        foreach ($p in @{ task = '<TASKNAME>'; command = '<COMMAND>'; workdir = '<WORKDIR>' }.GetEnumerator()) {
+        $defaults = @{
+            task       = '<TASKNAME>'
+            task_args  = "-TaskName '<TASKNAME>'"
+            task_regex = '<TASKNAME>'
+            command    = '<COMMAND>'
+            workdir    = '<WORKDIR>'
+        }
+        foreach ($p in $defaults.GetEnumerator()) {
             if (-not $values.ContainsKey($p.Key) -or [string]::IsNullOrWhiteSpace([string] $values[$p.Key])) {
                 $values[$p.Key] = $p.Value
             }

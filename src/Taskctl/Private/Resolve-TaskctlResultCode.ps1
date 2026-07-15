@@ -96,9 +96,15 @@ function Resolve-TaskctlResultCode {
     # プレースホルダを展開（プロース層のみ。コマンドは非翻訳のままカタログから来る）
     $expandValues = @{} + $Values
     if ($null -ne $finding.PSObject.Properties['Win32']) { $expandValues['win32'] = $finding.Win32 }
-    # 呼び出し側が実値を知らない場合の既定。<...> 表記は非翻訳（<TASKNAME> と同じ慣習）で、
+    # 呼び出し側が実値を知らない場合の既定。<...> 表記は非翻訳で、
     # 「ここに自分の値を入れる」ことが日英どちらでも分かる。空文字は絶対に出さない。
-    foreach ($p in @{ task = '<TASKNAME>'; command = '<COMMAND>' }.GetEnumerator()) {
+    $defaults = @{
+        task       = '<TASKNAME>'
+        task_args  = "-TaskName '<TASKNAME>'"
+        task_regex = '<TASKNAME>'
+        command    = '<COMMAND>'
+    }
+    foreach ($p in $defaults.GetEnumerator()) {
         if (-not $expandValues.ContainsKey($p.Key) -or [string]::IsNullOrWhiteSpace([string] $expandValues[$p.Key])) {
             $expandValues[$p.Key] = $p.Value
         }

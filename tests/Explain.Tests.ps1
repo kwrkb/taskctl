@@ -103,7 +103,13 @@ Describe 'Invoke-TaskctlExplain' {
             # explain 単体はタスクを知らない。空にせず、入れるべき場所を示す。
             $out = Invoke-TaskctlExplain '0x1' -Lang ja
             $out | Should -Match '<COMMAND>'
-            (Invoke-TaskctlExplain '0x41302' -Lang ja) | Should -Match 'Enable-ScheduledTask -TaskName "<TASKNAME>"'
+            (Invoke-TaskctlExplain '0x41302' -Lang ja) | Should -Match "Enable-ScheduledTask -TaskName '<TASKNAME>'"
+        }
+
+        It 'コマンドの値は単一引用符で囲む（名前に $ や ` が入っても壊れない）' {
+            # 二重引用符だと "$(...)" がコピペ実行時に評価される。
+            $out = Invoke-TaskctlExplain '0x41302' -Lang ja
+            $out | Should -Not -Match 'Enable-ScheduledTask -TaskName "'
         }
 
         It '1行に複数のプレースホルダがあっても全部展開する' {

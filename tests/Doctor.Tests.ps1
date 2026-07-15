@@ -294,6 +294,49 @@ Describe 'Invoke-TaskctlDoctor' {
         }
     }
 
+    Context 'コマンドが実際に対象へ届く（TaskPath とエスケープ）' {
+        It 'フォルダ配下のタスクには -TaskPath を付ける' {
+            # -TaskName にフルパスは渡せない（cmdlet が受け付けない）。-TaskPath を省くと
+            # ルートが対象になり、失敗するか別タスクを操作してしまう。
+            $v = InModuleScope Taskctl { Get-TaskctlTaskValue -TaskName 'MyTask' -TaskPath '\Foo\Bar\' }
+            $v.task_args | Should -Be "-TaskName 'MyTask' -TaskPath '\Foo\Bar\'"
+            $v.task | Should -Be '\Foo\Bar\MyTask'
+        }
+
+        It 'TaskPath が無い / 末尾の \ が無い場合を補正する' {
+            (InModuleScope Taskctl { Get-TaskctlTaskValue -TaskName 'T' -TaskPath $null }).task_args |
+                Should -Be "-TaskName 'T' -TaskPath '\'"
+            (InModuleScope Taskctl { Get-TaskctlTaskValue -TaskName 'T' -TaskPath '\Foo' }).task_args |
+                Should -Be "-TaskName 'T' -TaskPath '\Foo\'"
+        }
+
+        It "単一引用符を含む名前をエスケープする" {
+            $v = InModuleScope Taskctl { Get-TaskctlTaskValue -TaskName "It's" -TaskPath '\' }
+            $v.task_args | Should -Be "-TaskName 'It''s' -TaskPath '\'"
+        }
+
+        It '正規表現メタ文字を含む名前をエスケープする' {
+            # -match に生の名前を埋めると a[b で正規表現エラーになる
+            $v = InModuleScope Taskctl { Get-TaskctlTaskValue -TaskName 'a[b' -TaskPath '\' }
+            $v.task_regex | Should -Be '\\a\[b'
+            { [regex]::Match('x', $v.task_regex) } | Should -Not -Throw
+        }
+
+        It '生成した引数が実際の cmdlet で解釈できる' {
+            # 文字列としてではなく、PowerShell のパーサが引数として解釈できることを確認する
+            $v = InModuleScope Taskctl { Get-TaskctlTaskValue -TaskName "It's a Task" -TaskPath '\Foo\' }
+            $parsed = [System.Management.Automation.Language.Parser]::ParseInput(
+                "Get-ScheduledTask $($v.task_args)", [ref]$null, [ref]$null)
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseInput(
+                "Get-ScheduledTask $($v.task_args)", [ref]$null, [ref]$errors) | Out-Null
+            $errors | Should -BeNullOrEmpty
+            # 名前が引数として正しく復元されること
+            $cmd = $parsed.EndBlock.Statements[0].PipelineElements[0]
+            $cmd.CommandElements[2].Value | Should -Be "It's a Task"
+        }
+    }
+
     Context '--verbose（生の設定）' {
         BeforeAll {
             $acq = New-Acquired -Fixture 'network-drive.xml' -Name 'RawTask' -LastTaskResult 2

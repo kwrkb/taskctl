@@ -50,7 +50,7 @@ headings:
 snippets:
   operational_log: |
     Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational |
-      Where-Object { $_.Message -match "{{task}}" } | Select-Object -First 10
+      Where-Object { $_.Message -match '{{task_regex}}' } | Select-Object -First 10
   test_action_standalone: |
     # Run the action's command directly (outside the task) to isolate the problem
     {{command}}
@@ -78,7 +78,7 @@ codes:
     meaning: The task is disabled, so it will not run at its scheduled times.
     next: |
       Confirm the task is disabled on purpose. To run it again:
-        Enable-ScheduledTask -TaskName "{{task}}"
+        Enable-ScheduledTask {{task_args}}
 
   "0x00041303":
     meaning: Status code meaning the task has not run yet. Not a failure.
@@ -274,16 +274,22 @@ codes:
       For PowerShell, enable a transcript to capture details.
 
   "0x00000002":
-    meaning: The file to be executed was not found. This is not the program's exit code.
+    meaning: |
+      Most often this is ERROR_FILE_NOT_FOUND, a Windows system error meaning the file
+      to be executed was not found. Note, however, that LastTaskResult also carries the
+      program's own exit code, so a program returning 2 itself remains possible.
     cause: |
       The action's path may not exist, or it may not resolve from the task's run-time
       context (a different user, a mapped drive).
+      Alternatively, the launched program itself returned exit code 2.
     next: |
-      Check that the path resolves in the task's run-as user context.
+      First check that the path resolves in the task's run-as user context.
       An .exe on a network share often fails when only the run-as account lacks access.
       Official workaround: launch via cmd instead of calling it directly
         cmd /c \\server\share\app.exe
       or grant the run-as account access to the share.
+      If the path is fine, run it directly to see whether the program returns 2 itself:
+        {{snippets.test_action_standalone}}
 
   "0x80070005":
     meaning: Access denied. The run-as account lacks rights, or the target resource denies access.
@@ -303,21 +309,21 @@ rules:
     meaning: This task is disabled. It will not run when its scheduled time comes.
     next: |
       Confirm the task is disabled on purpose. To run it again:
-        Enable-ScheduledTask -TaskName "{{task}}"
+        Enable-ScheduledTask {{task_args}}
 
   no_triggers:
     meaning: The task has no triggers. It will only run when started manually.
     cause: A trigger may have been forgotten at registration, or the task may be intentionally manual-only.
     next: |
       If this is not meant to be manual-only, add a trigger. Current definition:
-        Export-ScheduledTask -TaskName "{{task}}"
+        Export-ScheduledTask {{task_args}}
 
   all_triggers_disabled:
     meaning: The task has triggers, but all of them are disabled. It will not start automatically.
     cause: Possibly left disabled after being paused temporarily.
     next: |
       Check whether the trigger states are intended:
-        (Get-ScheduledTask -TaskName "{{task}}").Triggers
+        (Get-ScheduledTask {{task_args}}).Triggers
 
   past_end_boundary:
     meaning: All triggers are past their end boundary (expiry). The task will not run automatically anymore.
@@ -329,8 +335,8 @@ rules:
     cause: The trigger conditions may never occur again (day/date combinations, etc.).
     next: |
       Check the trigger conditions:
-        (Get-ScheduledTask -TaskName "{{task}}").Triggers
-        Get-ScheduledTaskInfo -TaskName "{{task}}"
+        (Get-ScheduledTask {{task_args}}).Triggers
+        Get-ScheduledTaskInfo {{task_args}}
 
   never_run:
     meaning: This task has never run.

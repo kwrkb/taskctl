@@ -54,8 +54,11 @@ function Invoke-TaskctlDoctor {
 
     # 終了コード: error -> 3, warning -> 2, それ以外 -> 0
     $severities = @($results | ForEach-Object { $_.Findings } | ForEach-Object { $_.Severity })
+    # 取得できなかったタスクは「問題なし」と言えない（診断できていないだけ）。
+    # 重大とも断定できないので warning 扱い（＝レポートが不完全である、という警告）。
+    $acquireErrors = @($results | Where-Object AcquireError).Count
     $exitCode = if ($severities -contains 'error') { 3 }
-    elseif ($severities -contains 'warning') { 2 }
+    elseif ($severities -contains 'warning' -or $acquireErrors -gt 0) { 2 }
     else { 0 }
     $script:TaskctlLastExitCode = $exitCode
 
@@ -65,9 +68,10 @@ function Invoke-TaskctlDoctor {
             scanned   = $results.Count
             exit_code = $exitCode
             summary   = [ordered]@{
-                errors   = @($severities | Where-Object { $_ -eq 'error' }).Count
-                warnings = @($severities | Where-Object { $_ -eq 'warning' }).Count
-                notices  = @($severities | Where-Object { $_ -eq 'notice' }).Count
+                errors         = @($severities | Where-Object { $_ -eq 'error' }).Count
+                warnings       = @($severities | Where-Object { $_ -eq 'warning' }).Count
+                notices        = @($severities | Where-Object { $_ -eq 'notice' }).Count
+                acquire_errors = $acquireErrors
             }
             tasks     = @($results | ForEach-Object { ConvertTo-TaskctlDoctorJsonModel -Result $_ -Locale $locale })
         }
