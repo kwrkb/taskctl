@@ -101,7 +101,7 @@ Describe 'データ資産の coverage' {
             # snippets.<name> はカタログの定型文、それ以外は resolver が値を注入する既知の名前。
             $snippetKeys = @($cat.snippets.PSObject.Properties.Name)
             # resolver が値を注入する既知の名前（未指定なら <TASKNAME> 等の既定で埋まる）
-            $valueKeys = @('win32', 'task', 'command', 'workdir', 'days', 'limit_seconds')
+            $valueKeys = @('win32', 'task', 'task_args', 'task_regex', 'command', 'workdir', 'days', 'limit_seconds')
             $texts = foreach ($k in $registryKeys) {
                 "$($cat.codes.$k.meaning)`n$($cat.codes.$k.cause)`n$($cat.codes.$k.next)"
             }

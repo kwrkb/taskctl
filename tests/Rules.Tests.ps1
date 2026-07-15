@@ -26,8 +26,10 @@ BeforeAll {
         )
         $xml = Get-Content (Join-Path $script:fixtureDir $Fixture) -Raw
         InModuleScope Taskctl -Parameters @{ x = $xml; i = $Info; n = $Now; d = $FixedDrives; s = $CurrentSid } {
-            $model = ConvertFrom-TaskctlTaskXml -Xml $x -TaskName 'Fixture'
-            @(Invoke-TaskctlRuleEngine -Model $model -Info $i -Now $n -FixedDrives $d `
+            $model = ConvertFrom-TaskctlTaskXml -Xml $x -TaskName 'Fixture' -TaskPath '\'
+            # ドライブ構成も固定する（実機の USB / ネットワークドライブで結果が揺れないように）
+            @(Invoke-TaskctlRuleEngine -Model $model -Info $i -Now $n `
+                    -FixedDrives $d -NetworkDrives @() -LocalDrives @() `
                     -CurrentSid $s -CurrentName 'TESTHOST\fixture' |
                     ForEach-Object { $_.RuleId })
         }

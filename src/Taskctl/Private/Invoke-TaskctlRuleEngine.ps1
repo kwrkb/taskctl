@@ -20,6 +20,10 @@ function Invoke-TaskctlRuleEngine {
 
         [string[]] $FixedDrives = (Get-TaskctlFixedDrive),
 
+        [string[]] $NetworkDrives = (Get-TaskctlDriveLetter -DriveType Network),
+
+        [string[]] $LocalDrives = (Get-TaskctlDriveLetter -DriveType Removable, CDRom, Ram),
+
         # taskctl を動かしている本人の識別子（テストで注入）
         [string] $CurrentSid,
         [string] $CurrentName
@@ -34,7 +38,8 @@ function Invoke-TaskctlRuleEngine {
     foreach ($action in @($Model.Actions)) {
         $actionFactSets += , @{
             Action = $action
-            Facts  = (Get-TaskctlActionFact -Action $action -Principal $Model.Principal -FixedDrives $FixedDrives)
+            Facts  = (Get-TaskctlActionFact -Action $action -Principal $Model.Principal `
+                    -FixedDrives $FixedDrives -NetworkDrives $NetworkDrives -LocalDrives $LocalDrives)
         }
     }
 
@@ -100,9 +105,8 @@ function New-TaskctlRuleFinding {
     )
 
     # プロース側のプレースホルダへ渡す値（言語非依存の実値のみ）
-    $values = @{
-        task = if ($Model.TaskName) { $Model.TaskName } else { $Model.Uri }
-    }
+    $name = if ($Model.TaskName) { $Model.TaskName } else { $Model.Uri }
+    $values = Get-TaskctlTaskValue -TaskName $name -TaskPath $Model.TaskPath
     if ($Action) {
         $values['command'] = ('{0} {1}' -f $Action.Command, $Action.Arguments).Trim()
         $values['workdir'] = [string] $Action.WorkingDirectory

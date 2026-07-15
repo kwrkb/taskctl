@@ -117,6 +117,20 @@ $report.tasks | Where-Object { $_.last_result.is_failure } |
 ```
 
 `notice`（＝「仕様かもしれない」もの）は終了コード 0 に数えます。仕様通知で CI を赤くしないためです。
+一方、**設定を読めなかったタスクがあると終了コード 2** になります（`summary.acquire_errors`）。
+診断できなかったことを「問題なし」とは報告しません。
+
+#### JSON をファイルに保存する場合
+
+`--json` が返すのは文字列で、ファイルのエンコーディングは受け取り側が決めます。
+PowerShell 7 は既定が UTF-8 なので `taskctl doctor --json > report.json` で UTF-8 になりますが、
+**Windows PowerShell 5.1 の `>` / `Out-File` は既定が UTF-16LE** です。5.1 で UTF-8 にするには:
+
+```powershell
+taskctl doctor --json | Out-File report.json -Encoding utf8   # 5.1 では BOM 付き UTF-8
+# BOM なしにするなら:
+[IO.File]::WriteAllText('report.json', (taskctl doctor --json), [Text.UTF8Encoding]::new($false))
+```
 
 ## 設計の考え方
 

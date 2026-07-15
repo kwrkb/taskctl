@@ -117,9 +117,14 @@ function ConvertTo-TaskctlJsonModel {
 
 <#
 .SYNOPSIS
-    オブジェクトを UTF-8 の JSON 文字列にする。
+    オブジェクトを JSON 文字列にする。
 .DESCRIPTION
-    VISION: --json は表示ロケールに関わらず常に UTF-8。機械可読を壊さない。
+    VISION は「--json は常に UTF-8」を求めるが、返すのは .NET 文字列であり、
+    バイト列のエンコーディングは受け取り側が決める。
+      - PowerShell 7: 既定が UTF-8 なので `taskctl doctor --json > a.json` で UTF-8 になる
+      - Windows PowerShell 5.1: `>` / Out-File の既定が UTF-16LE のため UTF-8 にならない
+    ここでエンコーディングを制御することはできない（文字列を返すだけなので）。
+    ファイルへ UTF-8 で保存する方法は README に記載する。
 #>
 function ConvertTo-TaskctlJson {
     [CmdletBinding()]

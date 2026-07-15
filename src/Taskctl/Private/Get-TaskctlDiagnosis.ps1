@@ -34,16 +34,23 @@ function Get-TaskctlDiagnosis {
         if (-not $neverRun -or $IncludeNonFailureResult) {
             # doctor はタスク名と操作を知っているので、プロースのプレースホルダへ実値を渡す
             # （提示されるコマンドがそのままコピペできるようにする）。
-            $values = @{ task = $Acquired.TaskName }
-            $firstExec = @($Acquired.Model.Actions | Where-Object Type -eq 'Exec') | Select-Object -First 1
-            if ($firstExec) {
-                $values['command'] = ('{0} {1}' -f $firstExec.Command, $firstExec.Arguments).Trim()
+            $values = Get-TaskctlTaskValue -TaskName $Acquired.TaskName -TaskPath $Acquired.TaskPath
+            $execs = @($Acquired.Model.Actions | Where-Object Type -eq 'Exec')
+            if ($execs.Count -ge 1) {
+                # 操作が複数あるタスク（最大32個を順に実行）では、どれが失敗したかを
+                # 結果コードから特定できない。1つ目だけ見せて断定せず、全部を並べる。
+                $values['command'] = (@($execs | ForEach-Object {
+                            ('{0} {1}' -f $_.Command, $_.Arguments).Trim()
+                        }) -join "`n")
             }
             $codeFinding = Resolve-TaskctlResultCode -Code ([string] $Acquired.Info.LastTaskResult) -Locale $Locale -Values $values
             $codeFinding | Add-Member -NotePropertyName Type -NotePropertyValue 'result_code' -Force
-            if ($codeFinding.IsFailure -or $IncludeNonFailureResult) {
-                $findings.Add($codeFinding)
-            }
+            # 所見は常に集める。何を「表示」するかは severity で絞る（レンダラの仕事）。
+            # 以前は is_failure で集める側を絞っていたため、is_failure:false かつ
+            # severity:warning のコード（SCHED_S_TASK_TERMINATED = 実行時間制限超過で
+            # 強制終了された可能性）が集計にも詳細にも出ず、緑で埋もれていた。
+            # is_failure（コードが失敗の範囲か）と severity（どれだけ気にすべきか）は別の軸。
+            $findings.Add($codeFinding)
         }
     }
 
@@ -122,32 +129,40 @@ function Format-TaskctlDoctorReport {
     $catalog = Get-TaskctlCatalog -Locale $Locale
     $lines = [System.Collections.Generic.List[string]]::new()
 
-    # 走査時は warning 以上（または取得失敗）のタスクだけ詳細を出す。
-    # notice（判断＝仕様かもしれない）だけのタスクまで並べると本当の問題が埋もれる。
-    # 深掘り時はすべて出す。notice も JSON には常に全部載る。
-    $problem = if ($DeepDive) {
-        @($Results | Where-Object { $_.Findings.Count -gt 0 -or $_.AcquireError })
-    }
-    else {
-        @($Results | Where-Object {
-                $_.AcquireError -or
-                @($_.Findings | Where-Object { $_.Severity -in 'warning', 'error' }).Count -gt 0
-            })
-    }
+    # 表示は severity で絞る（集計・JSON は全所見を見る）。
+    # 走査時: warning 以上の所見だけ。notice（判断＝仕様かもしれない）や info（S_OK 等）まで
+    #         並べると本当の問題が埋もれる。
+    # 深掘り時: すべて出す。
+    # 深掘り時は全 severity（ok = S_OK も含む）。走査時は warning 以上だけ。
+    $shown = if ($DeepDive) { (Get-TaskctlRegistry).meta.severities } else { @('warning', 'error') }
+    $problem = @($Results | Where-Object {
+            $_.AcquireError -or @($_.Findings | Where-Object { $_.Severity -in $shown }).Count -gt 0
+        })
     $severities = @($Results | ForEach-Object { $_.Findings } | ForEach-Object { $_.Severity })
-    $summaryLine = if ($Locale -eq 'ja') {
-        '走査 {0} タスク: error {1} / warning {2} / notice {3}' -f $Results.Count,
-        @($severities | Where-Object { $_ -eq 'error' }).Count,
-        @($severities | Where-Object { $_ -eq 'warning' }).Count,
+    $counts = @(
+        $Results.Count
+        @($severities | Where-Object { $_ -eq 'error' }).Count
+        @($severities | Where-Object { $_ -eq 'warning' }).Count
         @($severities | Where-Object { $_ -eq 'notice' }).Count
+    )
+    $summaryLine = if ($Locale -eq 'ja') {
+        '走査 {0} タスク: error {1} / warning {2} / notice {3}' -f $counts
     }
     else {
-        'Scanned {0} task(s): error {1} / warning {2} / notice {3}' -f $Results.Count,
-        @($severities | Where-Object { $_ -eq 'error' }).Count,
-        @($severities | Where-Object { $_ -eq 'warning' }).Count,
-        @($severities | Where-Object { $_ -eq 'notice' }).Count
+        'Scanned {0} task(s): error {1} / warning {2} / notice {3}' -f $counts
     }
     $lines.Add($summaryLine)
+
+    # 診断できなかったタスクは黙って落とさない（「問題なし」に見えてしまう）
+    $acquireErrors = @($Results | Where-Object AcquireError).Count
+    if ($acquireErrors -gt 0) {
+        $lines.Add($(if ($Locale -eq 'ja') {
+                    '! {0} タスクは設定/実行情報を取得できず、診断できていません（下記 ! 行）' -f $acquireErrors
+                }
+                else {
+                    '! {0} task(s) could not be read, so they were not diagnosed (see ! lines below)' -f $acquireErrors
+                }))
+    }
     $lines.Add('')
 
     # ---- 問題のあるタスクの診断（先頭に） ----
@@ -160,7 +175,7 @@ function Format-TaskctlDoctorReport {
             $lines.Add((Format-TaskctlRawSetting -Model $r.Model -Info $r.Info -Locale $Locale))
             $lines.Add('')
         }
-        foreach ($f in $r.Findings) {
+        foreach ($f in ($r.Findings | Where-Object { $_.Severity -in $shown })) {
             $text = if ($f.Type -eq 'result_code') {
                 Format-TaskctlFinding -Finding $f -Locale $Locale
             }

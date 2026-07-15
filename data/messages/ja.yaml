@@ -52,7 +52,7 @@ headings:
 snippets:
   operational_log: |
     Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational |
-      Where-Object { $_.Message -match "{{task}}" } | Select-Object -First 10
+      Where-Object { $_.Message -match '{{task_regex}}' } | Select-Object -First 10
   test_action_standalone: |
     # 操作(Action)のコマンドを、タスクを介さず手元で直接実行して切り分ける
     {{command}}
@@ -80,7 +80,7 @@ codes:
     meaning: 無効化されているため、スケジュール時刻には実行されない。
     next: |
       無効化が意図通りか確認。動かしたいなら:
-        Enable-ScheduledTask -TaskName "{{task}}"
+        Enable-ScheduledTask {{task_args}}
 
   "0x00041303":
     meaning: まだ一度も実行されていない、という状態コード。失敗ではない。
@@ -275,16 +275,22 @@ codes:
       PowerShell なら transcript を有効化して詳細を採る。
 
   "0x00000002":
-    meaning: 実行しようとしたファイルが見つからない。プログラムの終了コードではない。
+    meaning: |
+      多くの場合 ERROR_FILE_NOT_FOUND（実行しようとしたファイルが見つからない）という
+      Windows システムエラーです。ただし LastTaskResult はプログラムの終了コードも
+      そのまま返すため、プログラムが独自に 2 を返した可能性も残ります。
     cause: |
       操作のパスが存在しない、またはタスク実行時の文脈（別ユーザー
       マップドライブ）から解決できない。
+      あるいは、起動したプログラム自身が終了コード 2 を返している。
     next: |
-      パスがタスクの実行ユーザー文脈で解決できるか確認する。
+      まずパスがタスクの実行ユーザー文脈で解決できるか確認する。
       共有(UNC)上の .exe は、実行アカウントのみ権限がある場合に失敗しやすい。
       回避策(公式): 直接指定でなく cmd 経由にする
         cmd /c \\server\share\app.exe
       またはクライアント(実行アカウント)に共有アクセス権を付与する。
+      パスに問題が無ければ、プログラム側が 2 を返していないか直接実行して確かめる:
+        {{snippets.test_action_standalone}}
 
   "0x80070005":
     meaning: アクセス拒否。実行アカウントの権限、または対象リソースの権限不足。
@@ -304,21 +310,21 @@ rules:
     meaning: このタスクは無効化されています。スケジュール時刻が来ても実行されません。
     next: |
       無効化が意図通りか確認してください。動かしたいなら:
-        Enable-ScheduledTask -TaskName "{{task}}"
+        Enable-ScheduledTask {{task_args}}
 
   no_triggers:
     meaning: トリガーが1つもありません。手動でしか実行されません。
     cause: 登録時にトリガーを付け忘れたか、意図的に手動専用にしている可能性。
     next: |
       手動専用の運用でないなら、トリガーを追加してください。現状の定義は:
-        Export-ScheduledTask -TaskName "{{task}}"
+        Export-ScheduledTask {{task_args}}
 
   all_triggers_disabled:
     meaning: トリガーはありますが、すべて無効です。自動では起動しません。
     cause: 一時的に止めた際の戻し忘れの可能性。
     next: |
       トリガーの有効/無効が意図通りか確認する:
-        (Get-ScheduledTask -TaskName "{{task}}").Triggers
+        (Get-ScheduledTask {{task_args}}).Triggers
 
   past_end_boundary:
     meaning: すべてのトリガーが終了境界（有効期限）を過ぎています。今後は自動実行されません。
@@ -330,8 +336,8 @@ rules:
     cause: トリガー条件が今後成立しない（曜日・日付の組み合わせ等）可能性。
     next: |
       トリガーの条件を確認する:
-        (Get-ScheduledTask -TaskName "{{task}}").Triggers
-        Get-ScheduledTaskInfo -TaskName "{{task}}"
+        (Get-ScheduledTask {{task_args}}).Triggers
+        Get-ScheduledTaskInfo {{task_args}}
 
   never_run:
     meaning: このタスクは一度も実行されていません。

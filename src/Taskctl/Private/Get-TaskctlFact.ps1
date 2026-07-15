@@ -119,7 +119,13 @@ function Get-TaskctlActionFact {
         [object] $Principal,
 
         # ローカルの固定ドライブ文字（テストで注入。既定は実機から取得）
-        [string[]] $FixedDrives = (Get-TaskctlFixedDrive)
+        [string[]] $FixedDrives = (Get-TaskctlFixedDrive),
+
+        # 実際にネットワークドライブとして割り当てられている文字
+        [string[]] $NetworkDrives = (Get-TaskctlDriveLetter -DriveType Network),
+
+        # ローカルに存在する非固定ドライブ（USB / 光学 等）。ネットワークとは呼ばない
+        [string[]] $LocalDrives = (Get-TaskctlDriveLetter -DriveType Removable, CDRom, Ram)
     )
 
     $facts = @{}
@@ -158,9 +164,15 @@ function Get-TaskctlActionFact {
     }
 
     # ---- ネットワーク/プロファイル依存 ----
+    # ネットワークドライブは「実際に DriveType=Network のもの」と「そもそも存在しないドライブ文字」
+    # の両方がありうる（タスク実行時にのみマウントされる想定の Z: など）。
+    # USB / 光学ドライブを「ネットワークドライブ」と誤報しないため、固定ドライブ以外を
+    # 一律にマップドライブ扱いはしない。
     $referenced = [regex]::Matches($allText, '(?<![A-Za-z0-9])([A-Za-z]):[\\/]') |
         ForEach-Object { $_.Groups[1].Value.ToUpperInvariant() } | Sort-Object -Unique
-    $facts['action.uses_mapped_drive'] = [bool] ($referenced | Where-Object { $_ -notin $FixedDrives })
+    $facts['action.uses_mapped_drive'] = [bool] @($referenced | Where-Object {
+            $_ -in $NetworkDrives -or ($_ -notin $FixedDrives -and $_ -notin $LocalDrives)
+        }).Count
 
     $facts['action.uses_unc_path'] = $allText -match '(^|[\s"''=])\\\\[^\\\s]'
 
@@ -223,13 +235,86 @@ function Test-TaskctlCurrentUser {
     ($id -notmatch '^S-1-' -and $id -eq (Split-Path $CurrentName -Leaf))
 }
 
+<#
+.SYNOPSIS
+    プロースのプレースホルダへ渡す、タスク識別子の各表現を作る。
+.DESCRIPTION
+    提示するコマンドがそのままコピペで動くことが VISION の成功条件。そのために:
+      task       : 表示用のフルパス（\Folder\Name）
+      task_args  : cmdlet の引数（-TaskName '...' -TaskPath '...'）。
+                   -TaskName にフルパスは渡せない（cmdlet が受け付けない）ため、
+                   必ず -TaskPath と組にする。
+      task_regex : -match に埋める正規表現（メタ文字をエスケープ）
+    値は PowerShell の単一引用符文字列として埋める前提でエスケープする
+    （' を '' にする）。単一引用符なら $ や ` が展開されず、名前に何が入っても壊れない。
+#>
+function Get-TaskctlTaskValue {
+    [CmdletBinding()]
+    param(
+        [AllowNull()] [string] $TaskName,
+        [AllowNull()] [string] $TaskPath
+    )
+
+    $path = if ([string]::IsNullOrWhiteSpace($TaskPath)) { '\' } else { $TaskPath }
+    if (-not $path.EndsWith('\')) { $path += '\' }
+    $full = $path + $TaskName
+
+    @{
+        task       = $full
+        task_args  = "-TaskName {0} -TaskPath {1}" -f (ConvertTo-TaskctlPSLiteral $TaskName), (ConvertTo-TaskctlPSLiteral $path)
+        task_regex = ConvertTo-TaskctlPSLiteralBody ([regex]::Escape($full))
+    }
+}
+
+<#
+.SYNOPSIS
+    PowerShell の単一引用符文字列リテラルへ（引用符ごと）変換する。
+#>
+function ConvertTo-TaskctlPSLiteral {
+    [CmdletBinding()]
+    param([AllowNull()] [string] $Text)
+    "'" + (ConvertTo-TaskctlPSLiteralBody $Text) + "'"
+}
+
+<#
+.SYNOPSIS
+    単一引用符文字列の中身としてのエスケープ（' を '' にする）。
+#>
+function ConvertTo-TaskctlPSLiteralBody {
+    [CmdletBinding()]
+    param([AllowNull()] [string] $Text)
+    if ($null -eq $Text) { return '' }
+    $Text -replace "'", "''"
+}
+
 function Get-TaskctlFixedDrive {
     [CmdletBinding()]
     param()
+    Get-TaskctlDriveLetter -DriveType Fixed
+}
 
-    @([System.IO.DriveInfo]::GetDrives() |
-            Where-Object { $_.DriveType -eq 'Fixed' } |
-            ForEach-Object { $_.Name.Substring(0, 1).ToUpperInvariant() })
+<#
+.SYNOPSIS
+    指定した種類のドライブ文字を返す。
+.NOTES
+    DriveInfo は列挙時に例外を投げうる（切断された共有など）ため、失敗しても空で返す。
+#>
+function Get-TaskctlDriveLetter {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [System.IO.DriveType[]] $DriveType
+    )
+
+    try {
+        @([System.IO.DriveInfo]::GetDrives() |
+                Where-Object { $_.DriveType -in $DriveType } |
+                ForEach-Object { $_.Name.Substring(0, 1).ToUpperInvariant() })
+    }
+    catch {
+        Write-Verbose "ドライブを列挙できません: $_"
+        @()
+    }
 }
 
 function Remove-TaskctlQuote {
