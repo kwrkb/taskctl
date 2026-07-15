@@ -20,7 +20,14 @@ function Resolve-TaskctlRuleProse {
             $prose = [PSCustomObject]@{ meaning = $Finding.RuleId; cause = $null; next = $Finding.RuleId }
         }
 
-        $values = if ($Finding.Values) { $Finding.Values } else { @{} }
+        # 実値が無い場合の既定。<...> 表記は非翻訳で、「ここに自分の値を入れる」ことが
+        # 日英どちらでも分かる。空文字は絶対に出さない。
+        $values = @{} + $(if ($Finding.Values) { $Finding.Values } else { @{} })
+        foreach ($p in @{ task = '<TASKNAME>'; command = '<COMMAND>'; workdir = '<WORKDIR>' }.GetEnumerator()) {
+            if (-not $values.ContainsKey($p.Key) -or [string]::IsNullOrWhiteSpace([string] $values[$p.Key])) {
+                $values[$p.Key] = $p.Value
+            }
+        }
         $meaning = if ($prose.meaning) { Expand-TaskctlPlaceholder -Text $prose.meaning -Catalog $catalog -Values $values } else { $null }
         $cause = if ($prose.cause) { Expand-TaskctlPlaceholder -Text $prose.cause -Catalog $catalog -Values $values } else { $null }
         $next = if ($prose.next) { Expand-TaskctlPlaceholder -Text $prose.next -Catalog $catalog -Values $values } else { $null }

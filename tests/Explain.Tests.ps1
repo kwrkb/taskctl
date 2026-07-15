@@ -83,6 +83,37 @@ Describe 'Invoke-TaskctlExplain' {
             }
         }
 
+        It 'snippet の中のプレースホルダも展開される（多段展開）' {
+            # {{snippets.operational_log}} の中身に {{task}} が入っている。
+            # 1パスだと snippet を差し込んだだけで {{task}} が残る。
+            $out = Invoke-TaskctlExplain '0x41306' -Lang ja
+            $out | Should -Match 'Get-WinEvent'
+            $out | Should -Not -Match '\{\{'
+        }
+
+        It '実値を渡せばコマンドに埋め込まれる（doctor 用の経路）' {
+            $finding = InModuleScope Taskctl {
+                Resolve-TaskctlResultCode -Code '0x1' -Locale 'ja' -Values @{ command = 'C:\app\run.exe --daily' }
+            }
+            $finding.Next | Should -Match 'C:\\app\\run\.exe --daily'
+            $finding.Next | Should -Not -Match '<COMMAND>'
+        }
+
+        It '実値が無ければ <COMMAND> / <TASKNAME> で埋める（空文字を出さない）' {
+            # explain 単体はタスクを知らない。空にせず、入れるべき場所を示す。
+            $out = Invoke-TaskctlExplain '0x1' -Lang ja
+            $out | Should -Match '<COMMAND>'
+            (Invoke-TaskctlExplain '0x41302' -Lang ja) | Should -Match 'Enable-ScheduledTask -TaskName "<TASKNAME>"'
+        }
+
+        It '複数行の値は差し込み先のインデントへ揃える' {
+            # 揃えないとコマンドが左端に落ち、コピペ範囲が読み取れなくなる
+            $out = Invoke-TaskctlExplain '0x41306' -Lang ja
+            $lines = @($out -split "`n" | Where-Object { $_ -match 'Get-WinEvent|Where-Object' })
+            $lines.Count | Should -Be 2
+            foreach ($l in $lines) { $l | Should -Match '^\s{4,}\S' }
+        }
+
         It '失敗しないコードには cause セクションを出さない' {
             $out = Invoke-TaskctlExplain '0x0' -Lang ja
             $out | Should -Not -Match '考えられる原因'

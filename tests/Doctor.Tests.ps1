@@ -249,6 +249,31 @@ Describe 'Invoke-TaskctlDoctor' {
         }
     }
 
+    Context 'コマンドがそのままコピペできる（VISION の成功条件）' {
+        BeforeAll {
+            $acq = New-Acquired -Fixture 'network-drive.xml' -Name 'CopyPasteTask' -LastTaskResult 1
+            Mock -ModuleName Taskctl Get-TaskctlTask { $acq }.GetNewClosure()
+        }
+
+        It '結果コードの所見に実際のコマンドが埋まる（<COMMAND> のままにしない）' {
+            $out = Invoke-TaskctlDoctor -TaskName 'CopyPasteTask' -Lang ja
+            $out | Should -Match 'powershell\.exe -File Z:\\scripts\\backup\.ps1'
+            $out | Should -Not -Match '<COMMAND>'
+        }
+
+        It '実際のタスク名が埋まる（<TASKNAME> のままにしない）' {
+            $out = Invoke-TaskctlDoctor -TaskName 'CopyPasteTask' -Lang ja
+            $out | Should -Not -Match '<TASKNAME>'
+        }
+
+        It '日英どちらでも同じコマンドが出る（コマンドは非翻訳）' {
+            foreach ($lang in 'ja', 'en') {
+                Invoke-TaskctlDoctor -TaskName 'CopyPasteTask' -Lang $lang |
+                    Should -Match 'powershell\.exe -File Z:\\scripts\\backup\.ps1'
+            }
+        }
+    }
+
     Context '--verbose（生の設定）' {
         BeforeAll {
             $acq = New-Acquired -Fixture 'network-drive.xml' -Name 'RawTask' -LastTaskResult 2

@@ -32,7 +32,14 @@ function Get-TaskctlDiagnosis {
         # 一度も実行されていないタスクの LastTaskResult (SCHED_S_TASK_HAS_NOT_RUN 等) は
         # 走査時のノイズになるため、深掘り時のみ表示する
         if (-not $neverRun -or $IncludeNonFailureResult) {
-            $codeFinding = Resolve-TaskctlResultCode -Code ([string] $Acquired.Info.LastTaskResult) -Locale $Locale
+            # doctor はタスク名と操作を知っているので、プロースのプレースホルダへ実値を渡す
+            # （提示されるコマンドがそのままコピペできるようにする）。
+            $values = @{ task = $Acquired.TaskName }
+            $firstExec = @($Acquired.Model.Actions | Where-Object Type -eq 'Exec') | Select-Object -First 1
+            if ($firstExec) {
+                $values['command'] = ('{0} {1}' -f $firstExec.Command, $firstExec.Arguments).Trim()
+            }
+            $codeFinding = Resolve-TaskctlResultCode -Code ([string] $Acquired.Info.LastTaskResult) -Locale $Locale -Values $values
             $codeFinding | Add-Member -NotePropertyName Type -NotePropertyValue 'result_code' -Force
             if ($codeFinding.IsFailure -or $IncludeNonFailureResult) {
                 $findings.Add($codeFinding)

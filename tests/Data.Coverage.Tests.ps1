@@ -100,13 +100,18 @@ Describe 'データ資産の coverage' {
         It 'メッセージ中のプレースホルダがすべて解決できる' {
             # snippets.<name> はカタログの定型文、それ以外は resolver が値を注入する既知の名前。
             $snippetKeys = @($cat.snippets.PSObject.Properties.Name)
-            $valueKeys = @('win32')
+            # resolver が値を注入する既知の名前（未指定なら <TASKNAME> 等の既定で埋まる）
+            $valueKeys = @('win32', 'task', 'command', 'workdir', 'days', 'limit_seconds')
             $texts = foreach ($k in $registryKeys) {
                 "$($cat.codes.$k.meaning)`n$($cat.codes.$k.cause)`n$($cat.codes.$k.next)"
             }
             $texts += foreach ($f in $cat.fallback.PSObject.Properties.Name) {
                 "$($cat.fallback.$f.meaning)`n$($cat.fallback.$f.cause)`n$($cat.fallback.$f.next)"
             }
+            $texts += foreach ($r in $cat.rules.PSObject.Properties.Name) {
+                "$($cat.rules.$r.meaning)`n$($cat.rules.$r.cause)`n$($cat.rules.$r.next)"
+            }
+            $texts += foreach ($s in $snippetKeys) { $cat.snippets.$s }
             foreach ($text in $texts) {
                 foreach ($m in [regex]::Matches($text, '\{\{([^}]+)\}\}')) {
                     $ref = $m.Groups[1].Value

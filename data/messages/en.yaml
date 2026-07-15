@@ -50,9 +50,10 @@ headings:
 snippets:
   operational_log: |
     Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational |
-      Where-Object { $_.Message -match "<TASKNAME>" } | Select-Object -First 10
+      Where-Object { $_.Message -match "{{task}}" } | Select-Object -First 10
   test_action_standalone: |
     # Run the action's command directly (outside the task) to isolate the problem
+    {{command}}
   isolate_security_context: |
     # Isolation step: temporarily switch to "Run only when user is logged on", re-run,
     # and check whether the problem is the security context (revert afterwards)
@@ -77,7 +78,7 @@ codes:
     meaning: The task is disabled, so it will not run at its scheduled times.
     next: |
       Confirm the task is disabled on purpose. To run it again:
-        Enable-ScheduledTask -TaskName "<TASKNAME>"
+        Enable-ScheduledTask -TaskName "{{task}}"
 
   "0x00041303":
     meaning: Status code meaning the task has not run yet. Not a failure.
