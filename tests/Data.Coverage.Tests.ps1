@@ -35,6 +35,14 @@ Describe 'データ資産の coverage' {
             }
         }
 
+        It 'source があるエントリは Microsoft の一次資料を指す' {
+            # 翻訳表の正確性がツールの信頼の根幹（VISION）。v1.1 以降に追加するエントリは
+            # 検証した一次資料の URL を必ず持つ。ブログや二次情報は根拠にしない。
+            foreach ($c in ($registry.codes | Where-Object { $_.PSObject.Properties['source'] })) {
+                $c.source | Should -Match '^https://learn\.microsoft\.com/' -Because "$($c.key) の source"
+            }
+        }
+
         It 'kind / severity / next_rank が meta の定義域に収まる' {
             foreach ($c in $registry.codes) {
                 $registry.meta.kinds | Should -Contain $c.kind
