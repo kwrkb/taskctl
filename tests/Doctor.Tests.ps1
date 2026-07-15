@@ -220,6 +220,38 @@ Describe 'Invoke-TaskctlDoctor' {
         }
     }
 
+    Context '--verbose（生の設定）' {
+        BeforeAll {
+            $acq = New-Acquired -Fixture 'network-drive.xml' -Name 'RawTask' -LastTaskResult 2
+            Mock -ModuleName Taskctl Get-TaskctlTask { $acq }.GetNewClosure()
+        }
+
+        It '既定では生の設定を出さない' {
+            Invoke-TaskctlDoctor -Lang ja | Should -Not -Match '生の設定'
+        }
+
+        It '操作 / プリンシパル / トリガー / 設定を出す' {
+            $out = Invoke-TaskctlDoctor -Lang ja -Raw
+            $out | Should -Match '生の設定'
+            $out | Should -Match 'powershell\.exe'
+            $out | Should -Match 'S-1-5-18'
+            $out | Should -Match 'TimeTrigger'
+            $out | Should -Match 'MultipleInstancesPolicy=Parallel'
+        }
+
+        It '環境変数を展開せずそのまま見せる（別文脈の値と食い違わせない）' {
+            Invoke-TaskctlDoctor -Lang ja -Raw | Should -Match '%USERPROFILE%\\work'
+        }
+
+        It 'taskctl doctor --verbose から渡る' {
+            taskctl doctor --verbose --lang ja | Should -Match '生の設定'
+        }
+
+        It 'explain の --verbose は無視される（生の設定は doctor 用）' {
+            { taskctl explain 0x2 --verbose --lang ja } | Should -Not -Throw
+        }
+    }
+
     Context 'taskctl ディスパッチャ経由' {
         BeforeAll {
             $acq = New-Acquired -Fixture 'normal.xml' -Name 'DispatchTask' -LastTaskResult 0

@@ -52,6 +52,7 @@ function Get-TaskctlDiagnosis {
         TaskPath     = $Acquired.TaskPath
         FullName     = $Acquired.FullName
         State        = $Acquired.State
+        Model        = $Acquired.Model      # --verbose（生の設定）で使う
         Info         = $Acquired.Info
         AcquireError = $Acquired.AcquireError
         CodeFinding  = $codeFinding
@@ -106,7 +107,9 @@ function Format-TaskctlDoctorReport {
         [Parameter(Mandatory)]
         [string] $Locale,
 
-        [switch] $DeepDive
+        [switch] $DeepDive,
+
+        [switch] $Raw
     )
 
     $catalog = Get-TaskctlCatalog -Locale $Locale
@@ -146,6 +149,10 @@ function Format-TaskctlDoctorReport {
         if ($r.AcquireError) {
             $lines.Add(('  ! {0}' -f $r.AcquireError))
         }
+        if ($Raw -and $r.Model) {
+            $lines.Add((Format-TaskctlRawSetting -Model $r.Model -Info $r.Info -Locale $Locale))
+            $lines.Add('')
+        }
         foreach ($f in $r.Findings) {
             $text = if ($f.Type -eq 'result_code') {
                 Format-TaskctlFinding -Finding $f -Locale $Locale
@@ -178,4 +185,56 @@ function Format-TaskctlDoctorReport {
     }
 
     ($lines -join "`n").TrimEnd()
+}
+
+<#
+.SYNOPSIS
+    生の設定を表示する（--verbose）。値は加工せずそのまま見せる。
+.DESCRIPTION
+    環境変数や相対パスは展開しない。taskctl の文脈で展開すると、
+    タスクが実際に走る文脈での値と食い違い、かえって誤解を生むため。
+#>
+function Format-TaskctlRawSetting {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [object] $Model,
+        [object] $Info,
+        [Parameter(Mandatory)] [string] $Locale
+    )
+
+    $isJa = $Locale -eq 'ja'
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $lines.Add(('  --- {0} ---' -f $(if ($isJa) { '生の設定' } else { 'Raw settings' })))
+
+    foreach ($a in @($Model.Actions)) {
+        $lines.Add(('    {0}: {1} {2}' -f $(if ($isJa) { '操作' } else { 'Action' }), $a.Command, $a.Arguments).TrimEnd())
+        if ($a.WorkingDirectory) {
+            $lines.Add(('      {0}: {1}' -f $(if ($isJa) { '作業ディレクトリ' } else { 'Working dir' }), $a.WorkingDirectory))
+        }
+    }
+    if ($Model.Principal) {
+        $lines.Add(('    {0}: {1} / LogonType={2} / RunLevel={3}' -f
+                $(if ($isJa) { '実行ユーザー' } else { 'Principal' }),
+                $Model.Principal.UserId, $Model.Principal.LogonType, $Model.Principal.RunLevel))
+    }
+    foreach ($t in @($Model.Triggers)) {
+        $lines.Add(('    {0}: {1} / Enabled={2} / Start={3} / End={4}' -f
+                $(if ($isJa) { 'トリガー' } else { 'Trigger' }),
+                $t.Type, $t.Enabled, $t.StartBoundary, $t.EndBoundary))
+    }
+    if ($Model.Settings) {
+        $s = $Model.Settings
+        $lines.Add(('    {0}: Enabled={1} / ExecutionTimeLimit={2} / MultipleInstancesPolicy={3}' -f
+                $(if ($isJa) { '設定' } else { 'Settings' }),
+                $s.Enabled, $s.ExecutionTimeLimit, $s.MultipleInstancesPolicy))
+        $lines.Add(('      DisallowStartIfOnBatteries={0} / RunOnlyIfIdle={1} / RunOnlyIfNetworkAvailable={2}' -f
+                $s.DisallowStartIfOnBatteries, $s.RunOnlyIfIdle, $s.RunOnlyIfNetworkAvailable))
+    }
+    if ($Info) {
+        $lines.Add(('    {0}: LastRunTime={1} / LastTaskResult={2} / NextRunTime={3}' -f
+                $(if ($isJa) { '実行情報' } else { 'Run info' }),
+                $Info.LastRunTime, $Info.LastTaskResult, $Info.NextRunTime))
+    }
+
+    $lines -join "`n"
 }

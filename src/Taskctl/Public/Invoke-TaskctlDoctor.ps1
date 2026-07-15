@@ -14,6 +14,9 @@
     構造化出力（常に UTF-8）。exit_code フィールドを含む。
 .PARAMETER IncludeMicrosoft
     \Microsoft\* 配下の OS 標準タスクも走査に含める。
+.PARAMETER Raw
+    生の設定（操作 / プリンシパル / トリガー / 主な設定）も表示する。
+    `taskctl doctor --verbose` から渡される。
 .NOTES
     終了コード（Get-TaskctlExitCode / JSON の exit_code）:
       0 問題なし / 2 警告あり / 3 重大な問題あり
@@ -31,7 +34,9 @@ function Invoke-TaskctlDoctor {
 
         [switch] $Json,
 
-        [switch] $IncludeMicrosoft
+        [switch] $IncludeMicrosoft,
+
+        [switch] $Raw
     )
 
     $locale = Resolve-TaskctlLocale -Lang $Lang
@@ -70,7 +75,7 @@ function Invoke-TaskctlDoctor {
     }
 
     Initialize-TaskctlConsole -Confirm:$false
-    $text = Format-TaskctlDoctorReport -Results $results -Locale $locale -DeepDive:$deepDive
+    $text = Format-TaskctlDoctorReport -Results $results -Locale $locale -DeepDive:$deepDive -Raw:$Raw
     $hint = Get-TaskctlEncodingHint -Locale $locale
     if ($hint) { $text = "$text`n`n$hint" }
     $text

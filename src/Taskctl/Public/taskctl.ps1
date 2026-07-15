@@ -48,7 +48,9 @@ function taskctl {
             }
             '^--lang=(.+)$' { $params['Lang'] = $Matches[1]; break }
             '^--json$' { $params['Json'] = $true; break }
-            '^--verbose$' { $params['Verbose'] = $true; break }
+            # --verbose は「生の設定も表示」。PowerShell の共通パラメータ -Verbose
+            # （詳細ログ）とは別物なので -Raw へ渡す。
+            '^--verbose$' { $params['Raw'] = $true; break }
             '^(--help|-h)$' { return Get-TaskctlUsage }
             '^--' { throw "不明なフラグです: $($rest[$i])`n`n$(Get-TaskctlUsage)" }
             default { $positional.Add($rest[$i]); break }
@@ -60,6 +62,8 @@ function taskctl {
             if ($positional.Count -lt 1) {
                 throw "explain には結果コードを指定してください（例: taskctl explain 0x41303）"
             }
+            # explain に生の設定は無い（--verbose は doctor 用）
+            $params.Remove('Raw')
             Invoke-TaskctlExplain -Code $positional[0] @params
         }
         'doctor' {
