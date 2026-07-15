@@ -1,0 +1,11 @@
+# Build artifacts (YAML→JSON 変換の生成物)
+src/Taskctl/data/*.json
+
+# Pester / test output
+testResults.xml
+coverage.xml
+
+# Editor / OS
+.vscode/
+*.swp
+Thumbs.db
