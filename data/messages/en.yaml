@@ -1,0 +1,251 @@
+# taskctl / data/messages/en.yaml
+# English message catalog. Human-facing prose only.
+# Facts (constant / kind / severity / is_failure / rank) live in registry.yaml.
+# Rule: commands, constant names, code values, and machine identifiers are never translated.
+# The key set must match registry.yaml (enforced by coverage tests).
+
+locale: en
+
+ranks:
+  info:
+    label: Info
+    description: This result is not a failure. It only reports a state.
+  decide:
+    label: Decision
+    description: Possibly by design. Only you can tell whether it is intended; the tool asks, not answers.
+  investigate:
+    label: Investigate
+    description: Cannot be determined. Shows commands to gather the information needed to find the real cause.
+  fix:
+    label: Fix
+    description: Cause is nearly certain. Shows a copy-pasteable standard command (you run it, the tool never does).
+
+kinds:
+  status:
+    label: Status code
+    description: A Task Scheduler status code (SCHED_S_*). Most of these are not failures.
+  sched_error:
+    label: Scheduler error
+    description: A Task Scheduler error (SCHED_E_*).
+  system:
+    label: System error
+    description: A Windows system / HRESULT error.
+  app:
+    label: Application exit code
+    description: An exit code returned by the launched program itself.
+
+# Common investigation snippets (referenced from messages via {{snippets.*}}).
+# Command lines are identical to ja (never translated); only comment lines are localized.
+snippets:
+  operational_log: |
+    Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational |
+      Where-Object { $_.Message -match "<TASKNAME>" } | Select-Object -First 10
+  test_action_standalone: |
+    # Run the action's command directly (outside the task) to isolate the problem
+  isolate_security_context: |
+    # Isolation step: temporarily switch to "Run only when user is logged on", re-run,
+    # and check whether the problem is the security context (revert afterwards)
+
+codes:
+  "0x00000000":
+    meaning: Completed successfully. The last run succeeded.
+    next: No action needed.
+
+  "0x00041300":
+    meaning: The task is ready to run at its next scheduled time. This is not a process exit code.
+    next: No action needed.
+
+  "0x00041301":
+    meaning: Status code meaning the task is currently running. Not a failure.
+    next: |
+      If it stays Running for a long time, the action's process may not be exiting.
+      Check the process in Task Manager or similar.
+      Related log: {{snippets.operational_log}}
+
+  "0x00041302":
+    meaning: The task is disabled, so it will not run at its scheduled times.
+    next: |
+      Confirm the task is disabled on purpose. To run it again:
+        Enable-ScheduledTask -TaskName "<TASKNAME>"
+
+  "0x00041303":
+    meaning: Status code meaning the task has not run yet. Not a failure.
+    next: Normal right after registration. If it persists when runs are expected, check the triggers and the enabled/disabled state.
+
+  "0x00041304":
+    meaning: There are no more scheduled runs left for this task.
+    next: Check whether the trigger's end boundary has passed.
+
+  "0x00041305":
+    meaning: One or more properties required to run this task on a schedule have not been set.
+    next: Check that a trigger is configured and enabled.
+
+  "0x00041306":
+    meaning: The last run was terminated by the user. This can also include forced termination such as exceeding the execution time limit.
+    next: |
+      If nobody stopped it manually, it may have been force-terminated for exceeding
+      the "Stop the task if it runs longer than" limit.
+      Compare the limit with the actual run time. Find the real cause in the log:
+        {{snippets.operational_log}}
+
+  "0x00041307":
+    meaning: The task has no triggers, or the existing triggers are disabled or not set. It will not start automatically.
+    next: Check whether triggers exist and are enabled.
+
+  "0x00041308":
+    meaning: Informational; event triggers have no fixed run time. Not a failure.
+    next: No action needed.
+
+  "0x0004131B":
+    meaning: The task was registered, but not all specified triggers will start it.
+    next: |
+      Check the event log to see which trigger is not working:
+        {{snippets.operational_log}}
+
+  "0x0004131C":
+    meaning: The task was registered, but may fail to start. The principal needs "batch logon" rights.
+    next: |
+      Grant the run-as user the "Log on as a batch job" right
+      (Local Security Policy > Local Policies > User Rights Assignment).
+
+  "0x00041325":
+    meaning: The Task Scheduler service has asked the task to run (queued). Not a failure.
+    next: No action needed.
+
+  "0x80041309":
+    meaning: A task's trigger is not found.
+    next: Check the triggers in the task definition and reconfigure them.
+
+  "0x8004130A":
+    meaning: One or more of the properties required to run this task have not been set.
+    next: Check for missing required items such as the action or the principal.
+
+  "0x8004130C":
+    meaning: The Task Scheduler service is not installed on this computer.
+    next: Check the system state (usually an environment-side problem).
+
+  "0x8004130D":
+    meaning: The task object could not be opened.
+    next: Check permissions, or whether the task definition is corrupted.
+
+  "0x8004130E":
+    meaning: The object is either an invalid task object or is not a task object.
+    next: Check that the target is specified correctly.
+
+  "0x8004130F":
+    meaning: No account information could be found in the security database for this task. Credentials are not set.
+    next: |
+      Re-register the task with the run-as user and credentials (password required):
+        Register-ScheduledTask ... -User "<USER>" -Password "<...>"   # prefer interactive input
+      Isolation: {{snippets.isolate_security_context}}
+
+  "0x80041310":
+    meaning: Unable to establish existence of the account specified.
+    next: Check that the run-as user name (DOMAIN\\user format) is correct.
+
+  "0x80041314":
+    meaning: The combination of account settings and run-time options is not supported.
+    next: |
+      Review the combination of "Run whether user is logged on or not" with the
+      selected logon type and rights. {{snippets.isolate_security_context}}
+
+  "0x80041315":
+    meaning: The Task Scheduler service is not running.
+    next: |
+      Check the service state:
+        Get-Service Schedule
+      (It normally starts automatically. If it is stopped, investigate the environment.)
+
+  "0x80041316":
+    meaning: The task XML contains an unexpected node.
+    next: Re-export the task XML, locate the corruption, and re-register the task.
+
+  "0x80041317":
+    meaning: The task XML contains an element or attribute from an unexpected namespace.
+    next: Check the namespaces in the task XML.
+
+  "0x80041318":
+    meaning: The task XML contains a value which is incorrectly formatted or out of range.
+    next: Check the format of the offending value (times, boundaries, durations, etc.).
+
+  "0x80041319":
+    meaning: The task XML is missing a required element or attribute.
+    next: Add the missing element and re-register the task.
+
+  "0x8004131A":
+    meaning: The task XML is malformed.
+    next: Re-export the XML and check its syntax.
+
+  "0x8004131E":
+    meaning: The task cannot be started after the trigger's end boundary has passed.
+    next: Extend the trigger's end date, or confirm this is intended.
+
+  "0x8004131F":
+    meaning: An instance of this task is already running.
+    next: |
+      The previous run may not have finished. Check the multiple-instances policy
+      and any leftover processes.
+
+  "0x80041320":
+    meaning: The task will not run because the user is not logged on.
+    next: |
+      Side effect of the "Run only when user is logged on" setting.
+      To run while logged off, change to "Run whether user is logged on or not"
+      (credentials required). If this is intended, no action needed.
+
+  "0x80041321":
+    meaning: The task image is corrupt or has been tampered with.
+    next: Delete and re-register the task (if tampering is suspected, also investigate how it happened).
+
+  "0x80041322":
+    meaning: The Task Scheduler service is not available.
+    next: Check the service state (Get-Service Schedule) and the environment.
+
+  "0x80041323":
+    meaning: The Task Scheduler service is too busy to handle the request. Please try again later.
+    next: Temporary load. Wait a while and run again.
+
+  "0x80041324":
+    meaning: The Task Scheduler service attempted to run the task, but the task did not run due to one of the constraints in the task definition.
+    next: |
+      The run may have been blocked by a condition (power / idle / network).
+      Check conditions such as "Start only if on AC power" or "only if idle".
+
+  "0x00001838":
+    meaning: The Task Scheduler service must be configured to run in the System account (individual tasks may run under other accounts).
+    next: Check that the service's logon account is SYSTEM.
+
+  "0x00000001":
+    meaning: |
+      "Incorrect function". In most cases the launched program itself returned
+      exit code 1 (an application-side failure, not Task Scheduler's).
+    next: |
+      Run the action's command directly, outside the task, to see the application error:
+        {{snippets.test_action_standalone}}
+      For PowerShell, enable a transcript to capture details.
+
+  "0x00000002":
+    meaning: The file to be executed was not found. This is not the program's exit code.
+    next: |
+      Check that the path resolves in the task's run-as user context.
+      An .exe on a network share often fails when only the run-as account lacks access.
+      Official workaround: launch via cmd instead of calling it directly
+        cmd /c \\server\share\app.exe
+      or grant the run-as account access to the share.
+
+  "0x80070005":
+    meaning: Access denied. The run-as account lacks rights, or the target resource denies access.
+    next: |
+      Check the following (from the official troubleshooting guide):
+        - Whether the run-as user has the required rights (does the task need admin?)
+        - Whether permissions on the C:\Windows\System32\Tasks folder were changed
+        - Whether the task is configured with credentials different from the current user
+
+fallback:
+  hresult_from_win32: |
+    This code is a Windows Win32 error. You can look up its meaning with:
+      net helpmsg <win32 value in decimal>
+    Example: 0x80070002 -> win32=2 -> `net helpmsg 2` -> "The system cannot find the file specified."
+  unknown: |
+    Unknown result code. Show both hex and decimal (signed and unsigned) and note
+    that it may be a program-specific exit code. Never guess.

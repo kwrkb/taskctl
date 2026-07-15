@@ -1,0 +1,342 @@
+# taskctl / data/registry.yaml
+# 結果コードレジストリ（言語非依存の事実のみ）
+#
+# ここには「コードについての事実」だけを置く: code -> constant / kind / severity / is_failure / next.rank
+# 人間向けの説明文（meaning / next.text）は messages/<locale>.yaml に置く。
+# カタログのキー集合 = このレジストリのキー集合（coverage テストで担保）。
+#
+# コードの意味は記憶で埋めず、Microsoft の一次資料で検証済みのものだけを載せる。
+# 出典:
+#   - Task Scheduler error and success constants
+#     https://learn.microsoft.com/windows/win32/taskschd/task-scheduler-error-and-success-constants
+#   - COM Error Codes (XACT, SCHED, OLE)
+#     https://learn.microsoft.com/windows/win32/com/com-error-codes-2
+#   - Troubleshoot issues with scheduled tasks not running
+#     https://learn.microsoft.com/troubleshoot/windows-server/system-management-components/troubleshoot-scheduled-tasks-not-running
+#   - Scheduled task can't run an .exe file on a share folder
+#     https://learn.microsoft.com/troubleshoot/windows-client/system-management-components/scheduled-task-cannot-run
+#   - "Access Denied" error when using Task Scheduler
+#     https://learn.microsoft.com/troubleshoot/windows-server/system-management-components/troubleshooting-task-scheduler-access-denied-error
+
+meta:
+  # LastTaskResult は符号付き 32bit int で返る。lookup 前に必ず uint32 hex へ正規化する:
+  #   - 負の10進（例 -2147024891） + 0x100000000 して uint32 化
+  #   - 正の10進 / "0x..." 表記  そのまま uint32
+  # 正規化後の hex（大文字8桁0x 付き）を key とする。
+  normalize: "signed-int32 -> uint32 hex (8桁)"
+
+  # rank: 次の一手の性格（言語非依存 ID。表示ラベルはカタログ側）
+  #   info        = 失敗ではない。状態を伝えるだけ
+  #   decide      = 仕様の可能性。意図通りか本人にしか決められない
+  #   investigate = 断定できない。情報収集コマンドを提示
+  #   fix         = 原因がほぼ確定。コピペできる標準コマンドを提示（実行はユーザー）
+  ranks: [info, decide, investigate, fix]
+
+  # kind: コードの種類（混同を解くのが doctor の主目的）
+  #   status      = タスクスケジューラの状態コード（SCHED_S_*）。多くは失敗ではない
+  #   sched_error = タスクスケジューラのエラー（SCHED_E_*）
+  #   system      = Windows システム/HRESULT エラー
+  #   app         = 実行プログラム自身の終了コード
+  kinds: [status, sched_error, system, app]
+
+  severities: [ok, info, notice, warning, error]
+
+codes:
+
+  # ---- 成功 ----
+  - key: "0x00000000"
+    dec: 0
+    constant: S_OK
+    kind: app
+    is_failure: false
+    severity: ok
+    next_rank: info
+
+  # ---- 状態コード SCHED_S_* (0x000413xx) : 失敗ではない ----
+  - key: "0x00041300"
+    dec: 267008
+    constant: SCHED_S_TASK_READY
+    kind: status
+    is_failure: false
+    severity: info
+    next_rank: info
+
+  - key: "0x00041301"
+    dec: 267009
+    constant: SCHED_S_TASK_RUNNING
+    kind: status
+    is_failure: false
+    severity: info
+    next_rank: decide
+
+  - key: "0x00041302"
+    dec: 267010
+    constant: SCHED_S_TASK_DISABLED
+    kind: status
+    is_failure: false
+    severity: notice
+    next_rank: decide
+
+  - key: "0x00041303"
+    dec: 267011
+    constant: SCHED_S_TASK_HAS_NOT_RUN
+    kind: status
+    is_failure: false
+    severity: info
+    next_rank: decide
+
+  - key: "0x00041304"
+    dec: 267012
+    constant: SCHED_S_TASK_NO_MORE_RUNS
+    kind: status
+    is_failure: false
+    severity: info
+    next_rank: decide
+
+  - key: "0x00041305"
+    dec: 267013
+    constant: SCHED_S_TASK_NOT_SCHEDULED
+    kind: status
+    is_failure: false
+    severity: warning
+    next_rank: investigate
+
+  - key: "0x00041306"
+    dec: 267014
+    constant: SCHED_S_TASK_TERMINATED
+    kind: status
+    is_failure: false
+    severity: warning
+    next_rank: investigate
+
+  - key: "0x00041307"
+    dec: 267015
+    constant: SCHED_S_TASK_NO_VALID_TRIGGERS
+    kind: status
+    is_failure: false
+    severity: warning
+    next_rank: investigate
+
+  - key: "0x00041308"
+    dec: 267016
+    constant: SCHED_S_EVENT_TRIGGER
+    kind: status
+    is_failure: false
+    severity: info
+    next_rank: info
+
+  - key: "0x0004131B"
+    dec: 267035
+    constant: SCHED_S_SOME_TRIGGERS_FAILED
+    kind: status
+    is_failure: true
+    severity: warning
+    next_rank: investigate
+
+  - key: "0x0004131C"
+    dec: 267036
+    constant: SCHED_S_BATCH_LOGON_PROBLEM
+    kind: status
+    is_failure: true
+    severity: warning
+    next_rank: fix
+
+  - key: "0x00041325"
+    dec: 267045
+    constant: SCHED_S_TASK_QUEUED
+    kind: status
+    is_failure: false
+    severity: info
+    next_rank: info
+
+  # ---- スケジューラエラー SCHED_E_* (0x800413xx) ----
+  - key: "0x80041309"
+    constant: SCHED_E_TRIGGER_NOT_FOUND
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x8004130A"
+    constant: SCHED_E_TASK_NOT_READY
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x8004130C"
+    constant: SCHED_E_SERVICE_NOT_INSTALLED
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x8004130D"
+    constant: SCHED_E_CANNOT_OPEN_TASK
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x8004130E"
+    constant: SCHED_E_INVALID_TASK
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x8004130F"
+    constant: SCHED_E_ACCOUNT_INFORMATION_NOT_SET
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: fix
+
+  - key: "0x80041310"
+    constant: SCHED_E_ACCOUNT_NAME_NOT_FOUND
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x80041314"
+    constant: SCHED_E_UNSUPPORTED_ACCOUNT_OPTION
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x80041315"
+    constant: SCHED_E_SERVICE_NOT_RUNNING
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: fix
+
+  # XML 系（タスク定義の破損）
+  - key: "0x80041316"
+    constant: SCHED_E_UNEXPECTEDNODE
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x80041317"
+    constant: SCHED_E_NAMESPACE
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x80041318"
+    constant: SCHED_E_INVALIDVALUE
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x80041319"
+    constant: SCHED_E_MISSINGNODE
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x8004131A"
+    constant: SCHED_E_MALFORMEDXML
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x8004131E"
+    constant: SCHED_E_PAST_END_BOUNDARY
+    kind: sched_error
+    is_failure: true
+    severity: notice
+    next_rank: decide
+
+  - key: "0x8004131F"
+    constant: SCHED_E_ALREADY_RUNNING
+    kind: sched_error
+    is_failure: true
+    severity: notice
+    next_rank: investigate
+
+  - key: "0x80041320"
+    constant: SCHED_E_USER_NOT_LOGGED_ON
+    kind: sched_error
+    is_failure: true
+    severity: warning
+    next_rank: decide
+
+  - key: "0x80041321"
+    constant: SCHED_E_INVALID_TASK_HASH
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x80041322"
+    constant: SCHED_E_SERVICE_NOT_AVAILABLE
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  - key: "0x80041323"
+    constant: SCHED_E_SERVICE_TOO_BUSY
+    kind: sched_error
+    is_failure: true
+    severity: warning
+    next_rank: decide
+
+  - key: "0x80041324"
+    constant: SCHED_E_TASK_ATTEMPTED
+    kind: sched_error
+    is_failure: true
+    severity: warning
+    next_rank: investigate
+
+  - key: "0x00001838"
+    dec: 6200
+    constant: SCHED_E_SERVICE_NOT_LOCALSYSTEM
+    kind: sched_error
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+  # ---- よく出るシステム/アプリ側コード ----
+  - key: "0x00000001"
+    dec: 1
+    constant: ERROR_INVALID_FUNCTION
+    kind: app
+    is_failure: true
+    severity: warning
+    next_rank: investigate
+
+  - key: "0x00000002"
+    dec: 2
+    constant: ERROR_FILE_NOT_FOUND
+    kind: system
+    is_failure: true
+    severity: warning
+    next_rank: investigate
+
+  - key: "0x80070005"
+    constant: "E_ACCESSDENIED (HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED))"
+    kind: system
+    is_failure: true
+    severity: error
+    next_rank: investigate
+
+# ---- fallback（表に無いコードの扱い。プロースはカタログ側） ----
+fallback:
+  # HRESULT_FROM_WIN32 パターン: 0x8007xxxx は下位16bit(xxxx)が Win32 エラーコード
+  hresult_from_win32:
+    match: "0x8007----"
+    extract: win32_low16
+    rank: investigate
+  # それ以外の未知コード: 断定せず、16進と10進(符号付き/符号なし両方)を提示して「不明」と表示
+  unknown:
+    rank: info
