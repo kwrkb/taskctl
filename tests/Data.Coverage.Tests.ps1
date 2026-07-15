@@ -60,6 +60,18 @@ Describe 'データ資産の coverage' {
             }
         }
 
+        It '失敗コード (is_failure) には cause がある' {
+            foreach ($c in ($registry.codes | Where-Object is_failure)) {
+                $cat.codes.($c.key).cause | Should -Not -BeNullOrEmpty -Because "$($c.key) は失敗コード"
+            }
+        }
+
+        It '3点セットの見出し (meaning / cause / next) がある' {
+            foreach ($h in 'meaning', 'cause', 'next') {
+                $cat.headings.$h | Should -Not -BeNullOrEmpty -Because "heading $h"
+            }
+        }
+
         It '全 rank にラベルと説明がある' {
             foreach ($r in $registry.meta.ranks) {
                 $cat.ranks.$r.label | Should -Not -BeNullOrEmpty -Because "rank $r"
@@ -74,21 +86,36 @@ Describe 'データ資産の coverage' {
             }
         }
 
-        It 'fallback のキー集合が registry と一致し、空文字が無い' {
+        It 'fallback のキー集合が registry と一致し、meaning/cause/next が揃う' {
             $regFallback = @($registry.fallback.PSObject.Properties.Name)
             $catFallback = @($cat.fallback.PSObject.Properties.Name)
             Compare-Object $regFallback $catFallback | Should -BeNullOrEmpty
             foreach ($f in $regFallback) {
-                $cat.fallback.$f | Should -Not -BeNullOrEmpty -Because "fallback $f"
+                foreach ($field in 'meaning', 'cause', 'next') {
+                    $cat.fallback.$f.$field | Should -Not -BeNullOrEmpty -Because "fallback $f の $field"
+                }
             }
         }
 
-        It 'メッセージ中の {{snippets.*}} 参照がすべて解決できる' {
+        It 'メッセージ中のプレースホルダがすべて解決できる' {
+            # snippets.<name> はカタログの定型文、それ以外は resolver が値を注入する既知の名前。
             $snippetKeys = @($cat.snippets.PSObject.Properties.Name)
-            foreach ($k in $registryKeys) {
-                $text = "$($cat.codes.$k.meaning)`n$($cat.codes.$k.next)"
-                foreach ($m in [regex]::Matches($text, '\{\{snippets\.(\w+)\}\}')) {
-                    $snippetKeys | Should -Contain $m.Groups[1].Value -Because "$k が参照"
+            $valueKeys = @('win32')
+            $texts = foreach ($k in $registryKeys) {
+                "$($cat.codes.$k.meaning)`n$($cat.codes.$k.cause)`n$($cat.codes.$k.next)"
+            }
+            $texts += foreach ($f in $cat.fallback.PSObject.Properties.Name) {
+                "$($cat.fallback.$f.meaning)`n$($cat.fallback.$f.cause)`n$($cat.fallback.$f.next)"
+            }
+            foreach ($text in $texts) {
+                foreach ($m in [regex]::Matches($text, '\{\{([^}]+)\}\}')) {
+                    $ref = $m.Groups[1].Value
+                    if ($ref -match '^snippets\.(\w+)$') {
+                        $snippetKeys | Should -Contain $Matches[1]
+                    }
+                    else {
+                        $valueKeys | Should -Contain $ref
+                    }
                 }
             }
         }
