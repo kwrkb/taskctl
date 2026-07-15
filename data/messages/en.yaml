@@ -295,6 +295,160 @@ codes:
         - Whether permissions on the C:\Windows\System32\Tasks folder were changed
         - Whether the task is configured with credentials different from the current user
 
+# Prose for detection rules (data/rules.yaml). Key set must match rule ids.
+# False-positive discipline: heuristic rules use investigative wording and never assert.
+rules:
+  task_disabled:
+    meaning: This task is disabled. It will not run when its scheduled time comes.
+    next: |
+      Confirm the task is disabled on purpose. To run it again:
+        Enable-ScheduledTask -TaskName "{{task}}"
+
+  no_triggers:
+    meaning: The task has no triggers. It will only run when started manually.
+    cause: A trigger may have been forgotten at registration, or the task may be intentionally manual-only.
+    next: |
+      If this is not meant to be manual-only, add a trigger. Current definition:
+        Export-ScheduledTask -TaskName "{{task}}"
+
+  all_triggers_disabled:
+    meaning: The task has triggers, but all of them are disabled. It will not start automatically.
+    cause: Possibly left disabled after being paused temporarily.
+    next: |
+      Check whether the trigger states are intended:
+        (Get-ScheduledTask -TaskName "{{task}}").Triggers
+
+  past_end_boundary:
+    meaning: All triggers are past their end boundary (expiry). The task will not run automatically anymore.
+    cause: A task registered with an expiry has expired. This may be intentional.
+    next: Confirm whether the expiry is intended. To continue, extend the end boundary.
+
+  no_next_run:
+    meaning: The task has enabled triggers, but no next run time is set.
+    cause: The trigger conditions may never occur again (day/date combinations, etc.).
+    next: |
+      Check the trigger conditions:
+        (Get-ScheduledTask -TaskName "{{task}}").Triggers
+        Get-ScheduledTaskInfo -TaskName "{{task}}"
+
+  never_run:
+    meaning: This task has never run.
+    cause: It may have just been registered, or its trigger conditions may not have occurred yet.
+    next: Normal right after registration. If the expected run time has already passed, check the triggers and conditions.
+
+  stale_last_run:
+    meaning: It has been {{days}} days since the last run.
+    cause: The trigger conditions may no longer occur, or the task may have been left stopped.
+    next: |
+      Confirm this interval is expected. If not, check the history:
+        {{snippets.operational_log}}
+
+  relative_command_without_workdir:
+    meaning: The action uses a relative path and no working directory ("Start in") is set.
+    cause: |
+      At run time the working directory is usually C:\Windows\System32, so a
+      relative path tends to point somewhere else than it did at registration.
+    next: |
+      Target: {{command}}
+      Use an absolute path for the action, or set the "Start in (optional)" directory.
+      Isolation: {{snippets.test_action_standalone}}
+
+  command_not_found:
+    meaning: The action's executable cannot be found from taskctl's context.
+    cause: |
+      The path may be wrong. Note that taskctl's context and the task's actual run
+      context (different user/rights) differ, so it may still be visible there.
+    next: |
+      Target: {{command}}
+      Check the spelling, and whether the path resolves in the task's run-as user context.
+      Isolation: {{snippets.test_action_standalone}}
+
+  working_directory_not_found:
+    meaning: The working directory cannot be found from taskctl's context.
+    cause: The path may be wrong, or only visible in the task's run context.
+    next: |
+      Target: {{workdir}}
+      Check the "Start in (optional)" path.
+
+  mapped_drive_dependency:
+    meaning: The action references a mapped (network) drive letter.
+    cause: |
+      Drive letter mappings are per logon session. At task run time (different user,
+      non-interactive) the drive is likely not mounted and will not resolve.
+    next: |
+      Target: {{command}}
+      Consider replacing it with a UNC path (\\server\share\...).
+      For running from a share, launching via cmd is the official workaround:
+        cmd /c \\server\share\script.cmd
+
+  unc_path_exec:
+    meaning: The action runs a program or script directly from a network share (UNC path).
+    cause: If the run-as account lacks access to the share, it fails (often as ERROR_FILE_NOT_FOUND).
+    next: |
+      If it fails, launching via cmd is the official workaround:
+        cmd /c \\server\share\app.exe
+      or grant the run-as account access to the share.
+
+  profile_dependency_as_service:
+    meaning: The task runs as a service account (SYSTEM etc.) but uses user-profile environment variables.
+    cause: |
+      For service accounts, %USERPROFILE% and %APPDATA% point to a different place
+      (C:\Windows\System32\config\systemprofile\...).
+    next: |
+      Target: {{command}}
+      Replace profile-dependent variables with absolute paths, or reconsider the run-as user.
+
+  powershell_script_without_file:
+    meaning: The action launches PowerShell, but no -File or -Command argument is present.
+    cause: Missing arguments. It may just start an interactive shell and run nothing.
+    next: |
+      Target: {{command}}
+      To run a script, pass -File:
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\script.ps1"
+
+  script_as_command:
+    meaning: A script file is set directly as the "Program" of the action.
+    cause: |
+      By default .ps1 is associated with an editor, so launching it directly does not
+      execute it (the task looks successful but nothing happens).
+    next: |
+      Target: {{command}}
+      Launch it via its host program:
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\script.ps1"
+
+  run_only_if_logged_on:
+    meaning: The task is set to "Run only when user is logged on".
+    next: |
+      Not running while logged off is by design. Is this intended?
+      To run while logged off, change to "Run whether user is logged on or not" (credentials required).
+
+  ac_power_only:
+    meaning: The task is set to "Start only if on AC power". It will not run on battery.
+    next: |
+      Not running on a laptop on battery is by design. Is this intended?
+      To run on battery too, clear the power condition.
+
+  idle_only:
+    meaning: The task is set to "Run only when idle". It will not run while the PC is in use.
+    next: |
+      On machines that never go idle it may not run for a long time. Is this intended?
+
+  network_only:
+    meaning: The task is set to "Run only when a network connection is available".
+    next: |
+      Not running while offline is by design. Is this intended?
+
+  short_execution_time_limit:
+    meaning: The execution time limit is rather short ({{limit_seconds}} seconds). Exceeding it force-stops the task (result SCHED_S_TASK_TERMINATED).
+    next: |
+      Confirm the work finishes within this limit. If not, extend
+      "Stop the task if it runs longer than" in Settings.
+
+  multiple_instances_parallel:
+    meaning: Multiple instances are set to "Run in parallel". New runs start even while the previous one is still running.
+    next: |
+      Confirm this work is safe to run concurrently (a common source of file locks and DB contention).
+
 fallback:
   hresult_from_win32:
     meaning: |

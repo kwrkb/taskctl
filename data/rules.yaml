@@ -1,0 +1,202 @@
+# taskctl / data/rules.yaml
+# 設定ミスの検出ルール（宣言的。言語非依存の事実のみ）
+#
+# VISION: 検出ルールも極力データ（宣言的ルール＋小さな評価器）で表現する。
+#         ロジックをコードに散らすと、i18n も多言語実装も分岐して壊れる。
+#         判定は1箇所、プロースはカタログ、が原則。
+#
+# 誤検知への規律（VISION より）:
+#   - taskctl が動く文脈と、タスクが実際に走る文脈（別ユーザーマップドライブ別プロファイル）は
+#     異なる。ファイル存在チェックはこの差で誤爆しうるため、原則 Error にせず「調査」として示す。
+#   - 相対パス検出引用符判定などヒューリスティックは Warning 止まり。「修正」は出さない。
+#   - 低確信の所見に、断定的な「修正」コマンドを出さない。
+# したがって v1 のルールに rank: fix は1つも無い（意図的）。
+#
+# 評価の仕組み:
+#   when は条件の配列（すべて成立で発火 = AND）。各条件は Get-TaskctlFact が返す
+#   ファクト名と期待値の組。ファクトの算出（＝判定）は Get-TaskctlFact に1箇所へ集約する。
+#   scope: task   … タスク単位で1回評価
+#   scope: action … Exec 操作ごとに評価（所見に該当操作を添える）
+
+meta:
+  severities: [notice, warning, error]
+  ranks: [info, decide, investigate, fix]
+
+rules:
+
+  # ---- 実行できない状態 ----
+  - id: task_disabled
+    scope: task
+    severity: notice
+    rank: decide
+    when:
+      - { fact: task.enabled, eq: false }
+
+  - id: no_triggers
+    scope: task
+    severity: warning
+    rank: investigate
+    when:
+      - { fact: task.enabled, eq: true }
+      - { fact: task.has_triggers, eq: false }
+
+  - id: all_triggers_disabled
+    scope: task
+    severity: warning
+    rank: investigate
+    when:
+      - { fact: task.enabled, eq: true }
+      - { fact: task.has_triggers, eq: true }
+      - { fact: task.has_enabled_trigger, eq: false }
+
+  - id: past_end_boundary
+    scope: task
+    severity: notice
+    rank: decide
+    when:
+      - { fact: task.enabled, eq: true }
+      - { fact: task.has_triggers, eq: true }
+      - { fact: trigger.all_past_end_boundary, eq: true }
+
+# ログオン/ブート/イベントトリガーのタスクは NextRunTime を持たず、長期間走らないのも
+  # 正常でありうる。実行予定系のルールは「時刻ベースのトリガーがある」場合に限定する（誤検知回避）。
+  - id: no_next_run
+    scope: task
+    severity: notice
+    rank: decide
+    when:
+      - { fact: task.enabled, eq: true }
+      - { fact: task.has_enabled_time_trigger, eq: true }
+      - { fact: info.next_run_set, eq: false }
+      - { fact: trigger.all_past_end_boundary, eq: false }
+
+  - id: never_run
+    scope: task
+    severity: notice
+    rank: decide
+    when:
+      - { fact: task.enabled, eq: true }
+      - { fact: task.has_enabled_time_trigger, eq: true }
+      - { fact: info.never_run, eq: true }
+
+  - id: stale_last_run
+    scope: task
+    severity: notice
+    rank: investigate
+    when:
+      - { fact: task.enabled, eq: true }
+      - { fact: task.has_enabled_time_trigger, eq: true }
+      - { fact: info.never_run, eq: false }
+      - { fact: info.days_since_last_run, gte: 90 }
+
+  # ---- パス解決（文脈差があるため、いずれも「調査」止まり） ----
+  - id: relative_command_without_workdir
+    scope: action
+    severity: warning
+    rank: investigate
+    when:
+      - { fact: action.command_relative, eq: true }
+      - { fact: action.working_directory_set, eq: false }
+
+  - id: command_not_found
+    scope: action
+    severity: warning
+    rank: investigate
+    when:
+      # 絶対パスかつ環境変数を含まない場合のみ検査する。
+      # それでも「taskctl の文脈で見えないだけ」がありうるので error にはしない。
+      - { fact: action.command_checkable, eq: true }
+      - { fact: action.command_exists, eq: false }
+
+  - id: working_directory_not_found
+    scope: action
+    severity: warning
+    rank: investigate
+    when:
+      - { fact: action.working_directory_checkable, eq: true }
+      - { fact: action.working_directory_exists, eq: false }
+
+  - id: mapped_drive_dependency
+    scope: action
+    severity: warning
+    rank: investigate
+    when:
+      - { fact: action.uses_mapped_drive, eq: true }
+
+  - id: unc_path_exec
+    scope: action
+    severity: notice
+    rank: investigate
+    when:
+      - { fact: action.uses_unc_path, eq: true }
+
+  - id: profile_dependency_as_service
+    scope: action
+    severity: warning
+    rank: investigate
+    when:
+      # SYSTEM / サービスアカウントで走るのに、ユーザープロファイル依存の変数を使っている
+      - { fact: principal.is_service_account, eq: true }
+      - { fact: action.uses_profile_variable, eq: true }
+
+  # ---- 起動指定の不備 ----
+  - id: powershell_script_without_file
+    scope: action
+    severity: warning
+    rank: investigate
+    when:
+      - { fact: action.is_powershell, eq: true }
+      - { fact: action.powershell_has_file_or_command, eq: false }
+
+  - id: script_as_command
+    scope: action
+    severity: warning
+    rank: investigate
+    when:
+      # .ps1 / .wsl などを Command に直接指定している（既定の関連付け依存で失敗しやすい）
+      - { fact: action.command_is_unlaunchable_script, eq: true }
+
+  # ---- 条件による抑止（仕様の可能性が高いので「判断」） ----
+  - id: run_only_if_logged_on
+    scope: task
+    severity: notice
+    rank: decide
+    when:
+      - { fact: principal.logon_type_interactive, eq: true }
+
+  - id: ac_power_only
+    scope: task
+    severity: notice
+    rank: decide
+    when:
+      - { fact: settings.disallow_start_if_on_batteries, eq: true }
+
+  - id: idle_only
+    scope: task
+    severity: notice
+    rank: decide
+    when:
+      - { fact: settings.run_only_if_idle, eq: true }
+
+  - id: network_only
+    scope: task
+    severity: notice
+    rank: decide
+    when:
+      - { fact: settings.run_only_if_network_available, eq: true }
+
+  # ---- 実行時の振る舞い ----
+  - id: short_execution_time_limit
+    scope: task
+    severity: notice
+    rank: decide
+    when:
+      - { fact: settings.execution_time_limit_seconds, lte: 60 }
+      - { fact: settings.execution_time_limit_set, eq: true }
+
+  - id: multiple_instances_parallel
+    scope: task
+    severity: notice
+    rank: decide
+    when:
+      - { fact: settings.multiple_instances_parallel, eq: true }

@@ -5,7 +5,7 @@
     Author            = 'kwrkb'
     Description       = 'Diagnose why Windows scheduled tasks fail (or are likely to) and show the concrete next step. Read-only; never modifies task settings.'
     PowerShellVersion = '5.1'
-    FunctionsToExport = @('taskctl', 'Invoke-TaskctlExplain', 'Invoke-TaskctlDoctor')
+    FunctionsToExport = @('taskctl', 'Invoke-TaskctlExplain', 'Invoke-TaskctlDoctor', 'Get-TaskctlExitCode')
     CmdletsToExport   = @()
     VariablesToExport = @()
     AliasesToExport   = @()

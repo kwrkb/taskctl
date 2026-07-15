@@ -296,6 +296,160 @@ codes:
         - C:\Windows\System32\Tasks フォルダの権限が変更されていないか
         - タスクが現在のユーザーと異なる資格情報で構成されていないか
 
+# 検出ルール (data/rules.yaml) のプロース。キー集合は rules.yaml の id と一致させる。
+# 誤検知への規律: ヒューリスティックの next は「調査」の文体（〜を確認する）で書き、断定しない。
+rules:
+  task_disabled:
+    meaning: このタスクは無効化されています。スケジュール時刻が来ても実行されません。
+    next: |
+      無効化が意図通りか確認してください。動かしたいなら:
+        Enable-ScheduledTask -TaskName "{{task}}"
+
+  no_triggers:
+    meaning: トリガーが1つもありません。手動でしか実行されません。
+    cause: 登録時にトリガーを付け忘れたか、意図的に手動専用にしている可能性。
+    next: |
+      手動専用の運用でないなら、トリガーを追加してください。現状の定義は:
+        Export-ScheduledTask -TaskName "{{task}}"
+
+  all_triggers_disabled:
+    meaning: トリガーはありますが、すべて無効です。自動では起動しません。
+    cause: 一時的に止めた際の戻し忘れの可能性。
+    next: |
+      トリガーの有効/無効が意図通りか確認する:
+        (Get-ScheduledTask -TaskName "{{task}}").Triggers
+
+  past_end_boundary:
+    meaning: すべてのトリガーが終了境界（有効期限）を過ぎています。今後は自動実行されません。
+    cause: 期限付きで登録されたタスクの期限切れ。意図的な可能性もあります。
+    next: 期限切れが意図通りか確認してください。続けるなら終了境界を延長します。
+
+  no_next_run:
+    meaning: 有効なトリガーがあるのに、次回実行時刻が設定されていません。
+    cause: トリガー条件が今後成立しない（曜日・日付の組み合わせ等）可能性。
+    next: |
+      トリガーの条件を確認する:
+        (Get-ScheduledTask -TaskName "{{task}}").Triggers
+        Get-ScheduledTaskInfo -TaskName "{{task}}"
+
+  never_run:
+    meaning: このタスクは一度も実行されていません。
+    cause: 登録直後か、トリガー条件がまだ成立していない可能性。
+    next: 登録直後なら正常です。実行されるはずの時刻を過ぎているなら、トリガーと条件を確認してください。
+
+  stale_last_run:
+    meaning: 最後の実行から {{days}} 日が経過しています。
+    cause: トリガー条件が成立しなくなったか、タスクが止められたままの可能性。
+    next: |
+      この間隔が想定通りか確認してください。想定外なら履歴を確認する:
+        {{snippets.operational_log}}
+
+  relative_command_without_workdir:
+    meaning: 操作のパスが相対パスで、作業ディレクトリも未設定です。
+    cause: |
+      タスク実行時の作業ディレクトリは通常 C:\Windows\System32 になるため、
+      相対パスは登録時と別の場所を指して失敗しやすい設定です。
+    next: |
+      対象: {{command}}
+      操作のパスを絶対パスにするか、「開始(オプション)」に作業ディレクトリを設定してください。
+      切り分け: {{snippets.test_action_standalone}}
+
+  command_not_found:
+    meaning: 操作の実行ファイルが、taskctl の実行文脈からは見つかりません。
+    cause: |
+      パスの誤りの可能性。ただし taskctl が動く文脈と、タスクが実際に走る文脈
+      （別ユーザー権限）は異なるため、そちらでは見える可能性も残ります。
+    next: |
+      対象: {{command}}
+      パスの綴りを確認し、タスクの実行ユーザーの文脈で解決できるか確認してください。
+      切り分け: {{snippets.test_action_standalone}}
+
+  working_directory_not_found:
+    meaning: 作業ディレクトリが、taskctl の実行文脈からは見つかりません。
+    cause: パスの誤りか、タスク実行文脈でのみ見えるパスの可能性。
+    next: |
+      対象: {{workdir}}
+      「開始(オプション)」のパスを確認してください。
+
+  mapped_drive_dependency:
+    meaning: 操作がマップドライブ（ネットワークドライブの割り当て文字）を参照しています。
+    cause: |
+      ドライブ文字の割り当てはログオンセッションごとです。タスク実行時
+      （別ユーザー非対話）にはマウントされておらず、解決できない可能性が高い設定です。
+    next: |
+      対象: {{command}}
+      UNC パス (\\server\share\...) へ置き換えることを検討してください。
+      共有(UNC)上の実行は cmd 経由が有効（公式回避策）:
+        cmd /c \\server\share\script.cmd
+
+  unc_path_exec:
+    meaning: 操作が共有 (UNC) 上のプログラム/スクリプトを直接実行します。
+    cause: 実行アカウントに共有へのアクセス権が無いと失敗します（ERROR_FILE_NOT_FOUND になりがち）。
+    next: |
+      失敗する場合は cmd 経由の起動が有効（公式回避策）:
+        cmd /c \\server\share\app.exe
+      または実行アカウントに共有アクセス権を付与してください。
+
+  profile_dependency_as_service:
+    meaning: サービスアカウント (SYSTEM 等) で実行されるのに、ユーザープロファイル依存の環境変数を使っています。
+    cause: |
+      %USERPROFILE% や %APPDATA% はサービスアカウントでは別の場所
+      (C:\Windows\System32\config\systemprofile\...) を指します。
+    next: |
+      対象: {{command}}
+      プロファイル依存の変数を絶対パスへ置き換えるか、実行ユーザーを見直してください。
+
+  powershell_script_without_file:
+    meaning: PowerShell を起動していますが、-File / -Command の指定が見当たりません。
+    cause: 引数の指定漏れ。対話シェルが起動するだけで、何も実行されない可能性。
+    next: |
+      対象: {{command}}
+      スクリプトを実行するなら -File を付けてください:
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\script.ps1"
+
+  script_as_command:
+    meaning: スクリプトファイルを「プログラム」として直接指定しています。
+    cause: |
+      .ps1 は既定ではメモ帳等に関連付けられており、直接起動では実行されません
+      （タスクは成功に見えるのに何も起きない、になりがち）。
+    next: |
+      対象: {{command}}
+      ホストプログラム経由で起動してください:
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\script.ps1"
+
+  run_only_if_logged_on:
+    meaning: 「ユーザーがログオンしているときのみ実行」の設定です。
+    next: |
+      ログオフ中に実行されないのは仕様です。意図通りですか？
+      ログオフ中も動かすなら「ログオンの有無に関わらず実行」へ変更します（資格情報が必要）。
+
+  ac_power_only:
+    meaning: 「AC 電源接続時のみ開始」の設定です。バッテリー駆動中は実行されません。
+    next: |
+      ノート PC で実行されないことがあるのは仕様です。意図通りですか？
+      バッテリーでも動かすなら「電源」の条件を外します。
+
+  idle_only:
+    meaning: 「アイドル時のみ実行」の設定です。PC 使用中は実行されません。
+    next: |
+      アイドルにならない環境では長く実行されないことがあります。意図通りですか？
+
+  network_only:
+    meaning: 「ネットワーク接続時のみ実行」の設定です。
+    next: |
+      オフライン時に実行されないのは仕様です。意図通りですか？
+
+  short_execution_time_limit:
+    meaning: "実行時間の制限が {{limit_seconds}} 秒と短めです。超過すると強制終了されます（結果: SCHED_S_TASK_TERMINATED）。"
+    next: |
+      処理がこの時間内に終わる想定か確認してください。足りないなら
+      「設定 > 停止するまでの時間」を延長します。
+
+  multiple_instances_parallel:
+    meaning: 多重起動が「並列で実行」に設定されています。前回の実行が残っていても重ねて起動します。
+    next: |
+      同時実行してよい処理か確認してください（ファイルロックDB 競合の原因になりがち）。
+
 fallback:
   hresult_from_win32:
     meaning: |

@@ -8,4 +8,5 @@ foreach ($file in ($public + $private)) {
     . $file.FullName
 }
 
-Export-ModuleMember -Function $public.BaseName
+# 公開面はマニフェストの FunctionsToExport で制御する（1ファイル複数関数を許すため、ここでは絞らない）
+Export-ModuleMember -Function *

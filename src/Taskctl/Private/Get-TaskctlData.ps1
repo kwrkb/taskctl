@@ -30,6 +30,20 @@ function Get-TaskctlRegistry {
     $script:TaskctlDataCache['registry']
 }
 
+function Get-TaskctlRules {
+    [CmdletBinding()]
+    param()
+
+    if (-not $script:TaskctlDataCache.ContainsKey('rules')) {
+        $path = Join-Path (Get-TaskctlDataPath) 'rules.json'
+        if (-not (Test-Path $path)) {
+            throw "検出ルールが見つかりません: $path`nbuild\Convert-DataToJson.ps1 を実行してください。"
+        }
+        $script:TaskctlDataCache['rules'] = Get-Content $path -Raw -Encoding utf8 | ConvertFrom-Json
+    }
+    $script:TaskctlDataCache['rules']
+}
+
 function Get-TaskctlCatalog {
     [CmdletBinding()]
     param(
