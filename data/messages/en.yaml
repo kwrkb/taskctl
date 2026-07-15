@@ -302,6 +302,85 @@ codes:
         - Whether permissions on the C:\Windows\System32\Tasks folder were changed
         - Whether the task is configured with credentials different from the current user
 
+  "0x800710E0":
+    meaning: |
+      A Windows system error whose low 16 bits are Win32 error 4320
+      (ERROR_REQUEST_REFUSED), "The operator or administrator has refused the request."
+      The value alone does not say what refused the request.
+    cause: |
+      The program the task launched, or a component it called, may have refused the
+      request. The result code carries neither the refusing party nor the reason.
+    next: |
+      Check the run history to see whether this happens every time or only under
+      specific conditions:
+        {{snippets.operational_log}}
+      Running the action directly often surfaces a more specific error:
+        {{snippets.test_action_standalone}}
+      The original message text is also available via:
+        net helpmsg 4320
+
+  "0x80070032":
+    meaning: |
+      A Windows system error whose low 16 bits are Win32 error 50
+      (ERROR_NOT_SUPPORTED), "The request is not supported."
+    cause: |
+      The attempted operation may not be supported on this machine (OS edition,
+      hardware, or configuration). The code does not say what is unsupported.
+    next: |
+      Run the action directly to find out what is not supported:
+        {{snippets.test_action_standalone}}
+      The original message text is also available via:
+        net helpmsg 50
+
+  "0x800700B7":
+    meaning: |
+      A Windows system error whose low 16 bits are Win32 error 183
+      (ERROR_ALREADY_EXISTS), "Cannot create a file when that file already exists."
+    cause: |
+      Something the task tried to create may have already existed - left behind by an
+      earlier run, or created by a concurrent run of the same task. This can also occur
+      when the work was already done, so the code alone does not mean something is broken.
+    next: |
+      Run the action directly to see what collides:
+        {{snippets.test_action_standalone}}
+      Check the run history to see whether the result repeats:
+        {{snippets.operational_log}}
+      The original message text is also available via:
+        net helpmsg 183
+
+  "0x80040111":
+    meaning: |
+      The COM error CLASS_E_CLASSNOTAVAILABLE, "ClassFactory cannot supply requested
+      class." This comes from a COM component the task called, not from Task Scheduler
+      itself.
+    cause: |
+      The task may have called a COM component that failed to instantiate. The COM
+      server may not be running, its registration may be broken, or the bitness
+      (32/64-bit) or execution context may not match.
+    next: |
+      The result code does not say which class (CLSID) could not be supplied.
+      Run the action directly to see whether a more specific error appears:
+        {{snippets.test_action_standalone}}
+      Also check the run history:
+        {{snippets.operational_log}}
+
+  "0x80040154":
+    meaning: |
+      The COM error REGDB_E_CLASSNOTREG, "Class not registered." This comes from a COM
+      component the task called, not from Task Scheduler itself.
+    cause: |
+      A COM component's registration may be missing or damaged. This also happens when
+      the caller looks at a registry view of a different bitness (32/64-bit). Note that
+      the registry seen (HKCU) depends on the account the task runs as.
+    next: |
+      The result code does not say which class (CLSID) is unregistered.
+      Run the action directly to see whether a more specific error appears:
+        {{snippets.test_action_standalone}}
+      If the task runs as an account other than yours, it does not necessarily see the
+      same registration you do.
+      Also check the run history:
+        {{snippets.operational_log}}
+
 # Prose for detection rules (data/rules.yaml). Key set must match rule ids.
 # False-positive discipline: heuristic rules use investigative wording and never assert.
 rules:

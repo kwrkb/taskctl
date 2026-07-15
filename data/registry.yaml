@@ -6,7 +6,9 @@
 # カタログのキー集合 = このレジストリのキー集合（coverage テストで担保）。
 #
 # コードの意味は記憶で埋めず、Microsoft の一次資料で検証済みのものだけを載せる。
-# 出典:
+# ここが誤るとツールの信頼が根本から崩れる（VISION より）。
+#
+# 出典（v1 で追加した 38 コードは、以下のいずれかで検証済み）:
 #   - Task Scheduler error and success constants
 #     https://learn.microsoft.com/windows/win32/taskschd/task-scheduler-error-and-success-constants
 #   - COM Error Codes (XACT, SCHED, OLE)
@@ -17,6 +19,10 @@
 #     https://learn.microsoft.com/troubleshoot/windows-client/system-management-components/scheduled-task-cannot-run
 #   - "Access Denied" error when using Task Scheduler
 #     https://learn.microsoft.com/troubleshoot/windows-server/system-management-components/troubleshooting-task-scheduler-access-denied-error
+#
+# v1.1 以降に追加するエントリは、`source:` に検証した一次資料の URL を必ず書く
+# （learn.microsoft.com のみ。テストで機械的に検査する）。
+# 一次資料で確認できないコードは載せない。fallback が「未知 / 調査」として正しく扱う。
 
 meta:
   # LastTaskResult は符号付き 32bit int で返る。lookup 前に必ず uint32 hex へ正規化する:
@@ -329,6 +335,51 @@ codes:
     is_failure: true
     severity: error
     next_rank: investigate
+
+  # ---- v1.1 で追加（実機の走査で「未知」として出たコードのうち、一次資料で確定できたもの）----
+  # HRESULT_FROM_WIN32 系は fallback でも net helpmsg に誘導できるが、意味をその場で
+  # 出せる方が速い。severity / rank は fallback と同じ（未知でないだけで、断定は増やさない）。
+
+  - key: "0x800710E0"
+    constant: "HRESULT_FROM_WIN32(ERROR_REQUEST_REFUSED)"
+    kind: system
+    is_failure: true
+    severity: warning
+    next_rank: investigate
+    source: https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--4000-5999-
+
+  - key: "0x80070032"
+    constant: "HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)"
+    kind: system
+    is_failure: true
+    severity: warning
+    next_rank: investigate
+    source: https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--0-499-
+
+  - key: "0x800700B7"
+    constant: "HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)"
+    kind: system
+    is_failure: true
+    severity: warning
+    next_rank: investigate
+    source: https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--0-499-
+
+  # COM 系 (0x8004xxxx) は fallback の 0x8007---- に当たらないため、これまで完全な「未知」だった。
+  - key: "0x80040111"
+    constant: CLASS_E_CLASSNOTAVAILABLE
+    kind: system
+    is_failure: true
+    severity: warning
+    next_rank: investigate
+    source: https://learn.microsoft.com/en-us/windows/win32/com/com-error-codes-1
+
+  - key: "0x80040154"
+    constant: REGDB_E_CLASSNOTREG
+    kind: system
+    is_failure: true
+    severity: warning
+    next_rank: investigate
+    source: https://learn.microsoft.com/en-us/windows/win32/com/com-error-codes-1
 
 # ---- fallback（表に無いコードの扱い。プロースはカタログ側） ----
 fallback:
