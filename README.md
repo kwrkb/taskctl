@@ -152,6 +152,21 @@ $report.tasks | Where-Object { $_.last_result.is_failure } |
 
 この境界はテストで機械的に守っています（キー集合の一致、snippets のコマンド行が日英で同一、など）。
 
+提示するコマンドは `{{task}}` / `{{command}}` のプレースホルダを持ち、`doctor` が実際の
+タスク名とコマンドを埋めます。そのままコピペして動きます。
+
+```console
+$ taskctl doctor MyBackup
+...
+次の一手 [調査]:
+  操作のコマンドをタスクを介さず直接実行して、アプリ側のエラーを確認:
+    # 操作(Action)のコマンドを、タスクを介さず手元で直接実行して切り分ける
+    powershell.exe -File Z:\scripts\backup.ps1     <- 実際のコマンドが入る
+```
+
+`explain <code>` 単体はタスクを知らないため、`<COMMAND>` / `<TASKNAME>` と表示します
+（空欄にはしません）。
+
 ### 翻訳表の正確性
 
 コードの意味は記憶で埋めず、**Microsoft の一次資料で検証済みのものだけ**を載せています
