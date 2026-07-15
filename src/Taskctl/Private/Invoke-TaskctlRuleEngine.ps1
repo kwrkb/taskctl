@@ -18,10 +18,17 @@ function Invoke-TaskctlRuleEngine {
 
         [datetime] $Now = (Get-Date),
 
-        [string[]] $FixedDrives = (Get-TaskctlFixedDrive)
+        [string[]] $FixedDrives = (Get-TaskctlFixedDrive),
+
+        # taskctl を動かしている本人の識別子（テストで注入）
+        [string] $CurrentSid,
+        [string] $CurrentName
     )
 
-    $taskFacts = Get-TaskctlTaskFact -Model $Model -Info $Info -Now $Now
+    $taskFactArgs = @{ Model = $Model; Info = $Info; Now = $Now }
+    if ($CurrentSid) { $taskFactArgs['CurrentSid'] = $CurrentSid }
+    if ($CurrentName) { $taskFactArgs['CurrentName'] = $CurrentName }
+    $taskFacts = Get-TaskctlTaskFact @taskFactArgs
 
     $actionFactSets = @()
     foreach ($action in @($Model.Actions)) {

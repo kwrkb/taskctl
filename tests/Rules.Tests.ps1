@@ -9,21 +9,27 @@ BeforeAll {
 
     $script:fixtureDir = Join-Path $PSScriptRoot 'fixtures'
 
-    # 時刻と固定ドライブを固定して評価する（実機差で結果が揺れないように）
+    # 時刻・固定ドライブ・実行ユーザーを固定して評価する（実機差で結果が揺れないように）
     $script:FixedNow = [datetime]'2026-07-15T12:00:00'
     $script:Drives = @('C')
+    # fixture の Principal に合わせた「本人」の SID（存在チェック系ルールの前提）
+    $script:FixtureSid = 'S-1-5-21-1111111111-2222222222-3333333333-1001'
+    $script:OtherSid = 'S-1-5-21-9999999999-8888888888-7777777777-1002'
 
     function Get-RuleId {
         param(
             [string] $Fixture,
             [object] $Info,
             [datetime] $Now = $script:FixedNow,
-            [string[]] $FixedDrives = $script:Drives
+            [string[]] $FixedDrives = $script:Drives,
+            [string] $CurrentSid = $script:FixtureSid
         )
         $xml = Get-Content (Join-Path $script:fixtureDir $Fixture) -Raw
-        InModuleScope Taskctl -Parameters @{ x = $xml; i = $Info; n = $Now; d = $FixedDrives } {
+        InModuleScope Taskctl -Parameters @{ x = $xml; i = $Info; n = $Now; d = $FixedDrives; s = $CurrentSid } {
             $model = ConvertFrom-TaskctlTaskXml -Xml $x -TaskName 'Fixture'
-            @(Invoke-TaskctlRuleEngine -Model $model -Info $i -Now $n -FixedDrives $d | ForEach-Object { $_.RuleId })
+            @(Invoke-TaskctlRuleEngine -Model $model -Info $i -Now $n -FixedDrives $d `
+                    -CurrentSid $s -CurrentName 'TESTHOST\fixture' |
+                    ForEach-Object { $_.RuleId })
         }
     }
 
@@ -164,6 +170,28 @@ Describe '検出ルール' {
             $ids | Should -Not -Contain 'never_run'
             $ids | Should -Not -Contain 'no_next_run'
             $ids | Should -Not -Contain 'stale_last_run'
+        }
+
+        It '他ユーザーのタスクでは存在チェックをしない（読めないだけを「無い」と誤検知しない）' {
+            # taskctl の Test-Path は本人の権限で走る。別ユーザーのタスクのパスは
+            # 「本人に読めないだけで、実行時には見える」ことがある。
+            $info = New-Info -LastRunTime $null -NextRunTime $null
+            $ids = Get-RuleId 'no-trigger-disabled.xml' -Info $info -CurrentSid $script:OtherSid
+            $ids | Should -Not -Contain 'command_not_found'
+        }
+
+        It '本人のタスクなら存在チェックする（検査できる時はする）' {
+            $info = New-Info -LastRunTime $null -NextRunTime $null
+            $ids = Get-RuleId 'no-trigger-disabled.xml' -Info $info -CurrentSid $script:FixtureSid
+            $ids | Should -Contain 'command_not_found'
+        }
+
+        It 'SYSTEM 実行のタスクでは存在チェックをしない' {
+            # network-drive.xml は S-1-5-18 (SYSTEM)
+            $info = New-Info -LastRunTime ([datetime]'2026-07-15T03:00:00') -NextRunTime ([datetime]'2026-07-16T03:00:00')
+            $ids = Get-RuleId 'network-drive.xml' -Info $info
+            $ids | Should -Not -Contain 'command_not_found'
+            $ids | Should -Not -Contain 'working_directory_not_found'
         }
     }
 
