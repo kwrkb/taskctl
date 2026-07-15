@@ -52,9 +52,10 @@ headings:
 snippets:
   operational_log: |
     Get-WinEvent -LogName Microsoft-Windows-TaskScheduler/Operational |
-      Where-Object { $_.Message -match "<TASKNAME>" } | Select-Object -First 10
+      Where-Object { $_.Message -match "{{task}}" } | Select-Object -First 10
   test_action_standalone: |
     # 操作(Action)のコマンドを、タスクを介さず手元で直接実行して切り分ける
+    {{command}}
   isolate_security_context: |
     # 切り分け: 一時的に「ユーザーがログオンしているときのみ実行」へ変えて再実行し、
     # セキュリティ文脈の問題かを確認する（確認後は元に戻す）
@@ -79,7 +80,7 @@ codes:
     meaning: 無効化されているため、スケジュール時刻には実行されない。
     next: |
       無効化が意図通りか確認。動かしたいなら:
-        Enable-ScheduledTask -TaskName "<TASKNAME>"
+        Enable-ScheduledTask -TaskName "{{task}}"
 
   "0x00041303":
     meaning: まだ一度も実行されていない、という状態コード。失敗ではない。

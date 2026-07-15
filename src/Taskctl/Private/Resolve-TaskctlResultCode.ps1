@@ -17,7 +17,11 @@ function Resolve-TaskctlResultCode {
         [string] $Code,
 
         [Parameter(Mandatory)]
-        [string] $Locale
+        [string] $Locale,
+
+        # プロースのプレースホルダへ渡す実値（doctor は task / command を知っている）。
+        # explain 単体では分からないため、既定のプレースホルダ表記で埋める。
+        [hashtable] $Values = @{}
     )
 
     $normalized = ConvertTo-TaskctlCode $Code
@@ -90,11 +94,18 @@ function Resolve-TaskctlResultCode {
     }
 
     # プレースホルダを展開（プロース層のみ。コマンドは非翻訳のままカタログから来る）
-    $values = @{}
-    if ($null -ne $finding.PSObject.Properties['Win32']) { $values['win32'] = $finding.Win32 }
+    $expandValues = @{} + $Values
+    if ($null -ne $finding.PSObject.Properties['Win32']) { $expandValues['win32'] = $finding.Win32 }
+    # 呼び出し側が実値を知らない場合の既定。<...> 表記は非翻訳（<TASKNAME> と同じ慣習）で、
+    # 「ここに自分の値を入れる」ことが日英どちらでも分かる。空文字は絶対に出さない。
+    foreach ($p in @{ task = '<TASKNAME>'; command = '<COMMAND>' }.GetEnumerator()) {
+        if (-not $expandValues.ContainsKey($p.Key) -or [string]::IsNullOrWhiteSpace([string] $expandValues[$p.Key])) {
+            $expandValues[$p.Key] = $p.Value
+        }
+    }
     foreach ($field in 'Meaning', 'Cause', 'Next') {
         if ($finding.$field) {
-            $finding.$field = Expand-TaskctlPlaceholder -Text $finding.$field -Catalog $catalog -Values $values
+            $finding.$field = Expand-TaskctlPlaceholder -Text $finding.$field -Catalog $catalog -Values $expandValues
         }
     }
 
@@ -107,6 +118,10 @@ function Resolve-TaskctlResultCode {
 .DESCRIPTION
     snippets はカタログの定型文へ、それ以外は Values で渡された値へ置換する。
     未定義の参照は原文のまま残す（空文字を出さないため。coverage テストで検出する）。
+    snippet の中身がさらにプレースホルダを含む（例: operational_log の {{task}}）ため、
+    変化が無くなるまで繰り返す。循環参照に備えて回数を上限で打ち切る。
+    複数行の値を差し込むときは、継続行をプレースホルダの桁へ揃える
+    （揃えないとコマンドが左端に落ちて、コピペ範囲が読み取れなくなる）。
 #>
 function Expand-TaskctlPlaceholder {
     [CmdletBinding()]
@@ -118,18 +133,39 @@ function Expand-TaskctlPlaceholder {
         [Parameter(Mandatory)]
         [object] $Catalog,
 
-        [hashtable] $Values = @{}
+        [hashtable] $Values = @{},
+
+        [int] $MaxPass = 5
     )
 
-    [regex]::Replace($Text, '\{\{(\w+(?:\.\w+)?)\}\}', {
-            param($m)
-            $ref = $m.Groups[1].Value
-            if ($ref -match '^snippets\.(\w+)$') {
-                $snippet = $Catalog.snippets.($Matches[1])
-                if ($null -eq $snippet) { return $m.Value }
-                return $snippet.TrimEnd()
-            }
-            if ($Values.ContainsKey($ref)) { return [string] $Values[$ref] }
-            $m.Value
-        })
+    $current = $Text
+    for ($i = 0; $i -lt $MaxPass; $i++) {
+        # 行頭からプレースホルダまでの空白を捉え、複数行の値をその桁へ揃える
+        $next = [regex]::Replace($current, '(?m)^([ \t]*)(.*?)\{\{(\w+(?:\.\w+)?)\}\}', {
+                param($m)
+                $indent = $m.Groups[1].Value
+                $before = $m.Groups[2].Value
+                $ref = $m.Groups[3].Value
+
+                $value = if ($ref -match '^snippets\.(\w+)$') {
+                    $snippet = $Catalog.snippets.($Matches[1])
+                    if ($null -eq $snippet) { $null } else { $snippet.TrimEnd() }
+                }
+                elseif ($Values.ContainsKey($ref)) { [string] $Values[$ref] }
+                else { $null }
+
+                if ($null -eq $value) { return $m.Value }   # 未定義は原文のまま
+
+                # 2行目以降を、プレースホルダのある行のインデントへ揃える
+                $lines = $value -split "`r?`n"
+                if ($lines.Count -gt 1) {
+                    $value = ($lines[0], ($lines[1..($lines.Count - 1)] | ForEach-Object { $indent + $_ })) -join "`n"
+                }
+                $indent + $before + $value
+            })
+        if ($next -eq $current) { return $next }
+        $current = $next
+    }
+    Write-Verbose "プレースホルダの展開が $MaxPass 回で収束しませんでした（循環参照の可能性）"
+    $current
 }
