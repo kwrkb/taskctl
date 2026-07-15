@@ -140,12 +140,10 @@ function Expand-TaskctlPlaceholder {
 
     $current = $Text
     for ($i = 0; $i -lt $MaxPass; $i++) {
-        # 行頭からプレースホルダまでの空白を捉え、複数行の値をその桁へ揃える
-        $next = [regex]::Replace($current, '(?m)^([ \t]*)(.*?)\{\{(\w+(?:\.\w+)?)\}\}', {
+        $source = $current   # インデント算出のため、この pass の入力を閉じ込める
+        $next = [regex]::Replace($source, '\{\{(\w+(?:\.\w+)?)\}\}', {
                 param($m)
-                $indent = $m.Groups[1].Value
-                $before = $m.Groups[2].Value
-                $ref = $m.Groups[3].Value
+                $ref = $m.Groups[1].Value
 
                 $value = if ($ref -match '^snippets\.(\w+)$') {
                     $snippet = $Catalog.snippets.($Matches[1])
@@ -156,12 +154,14 @@ function Expand-TaskctlPlaceholder {
 
                 if ($null -eq $value) { return $m.Value }   # 未定義は原文のまま
 
-                # 2行目以降を、プレースホルダのある行のインデントへ揃える
                 $lines = $value -split "`r?`n"
-                if ($lines.Count -gt 1) {
-                    $value = ($lines[0], ($lines[1..($lines.Count - 1)] | ForEach-Object { $indent + $_ })) -join "`n"
-                }
-                $indent + $before + $value
+                if ($lines.Count -le 1) { return $value }
+
+                # 複数行の値は、2行目以降をプレースホルダのある行のインデントへ揃える。
+                # 揃えないとコマンドが左端に落ち、コピペ範囲が読み取れない。
+                $lineStart = $source.LastIndexOf("`n", [Math]::Max(0, $m.Index - 1)) + 1
+                $indent = ([regex]::Match($source.Substring($lineStart), '^[ \t]*')).Value
+                ($lines[0], ($lines[1..($lines.Count - 1)] | ForEach-Object { $indent + $_ })) -join "`n"
             })
         if ($next -eq $current) { return $next }
         $current = $next

@@ -106,6 +106,25 @@ Describe 'Invoke-TaskctlExplain' {
             (Invoke-TaskctlExplain '0x41302' -Lang ja) | Should -Match 'Enable-ScheduledTask -TaskName "<TASKNAME>"'
         }
 
+        It '1行に複数のプレースホルダがあっても全部展開する' {
+            # 以前は正規表現を行頭アンカーにしていたため、1パスで行あたり1個しか
+            # 置換できず、多段展開の回数（既定5）を超えると残った。
+            $r = InModuleScope Taskctl {
+                $cat = Get-TaskctlCatalog -Locale ja
+                Expand-TaskctlPlaceholder -Text '{{a}} {{b}} {{c}} {{d}} {{e}} {{f}} {{g}}' `
+                    -Catalog $cat -Values @{ a = 1; b = 2; c = 3; d = 4; e = 5; f = 6; g = 7 }
+            }
+            $r | Should -Be '1 2 3 4 5 6 7'
+        }
+
+        It '未定義のプレースホルダは原文のまま残す（空文字にしない）' {
+            $r = InModuleScope Taskctl {
+                $cat = Get-TaskctlCatalog -Locale ja
+                Expand-TaskctlPlaceholder -Text 'x {{nope}} y' -Catalog $cat -Values @{}
+            }
+            $r | Should -Be 'x {{nope}} y'
+        }
+
         It '複数行の値は差し込み先のインデントへ揃える' {
             # 揃えないとコマンドが左端に落ち、コピペ範囲が読み取れなくなる
             $out = Invoke-TaskctlExplain '0x41306' -Lang ja
