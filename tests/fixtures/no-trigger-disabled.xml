@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <URI>\DisabledNoTrigger</URI>
+    <Description>タスク無効 + トリガー無し + 多重起動許可。Settings の既定値省略も含む。</Description>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-18</UserId>
+    </Principal>
+  </Principals>
+  <Settings>
+    <Enabled>false</Enabled>
+    <MultipleInstancesPolicy>Parallel</MultipleInstancesPolicy>
+  </Settings>
+  <Triggers />
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\does-not-exist\ghost.exe</Command>
+    </Exec>
+  </Actions>
+</Task>
