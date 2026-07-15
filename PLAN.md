@@ -121,19 +121,59 @@ taskctl/
 apply / write 全般、COM 実装、GUI、常駐、config-as-code、複数 PC 管理、Windows 以外。
 `Get-/Register-/Enable-/Start-ScheduledTask` で足りる操作は再発明しない。
 
-### v1.1 以降の候補（実機 241 タスクの走査で見えたもの）
+## v1.1: 翻訳表の拡充（完了 / PR）
 
-翻訳表に無く、実際に出現した結果コード。**一次資料での検証を経てから**追加する（推測で埋めない）:
+ブランチ `feature/v1.1-result-codes` → PR。
 
-| コード | 出現 | 備考 |
+実機 241 タスク（Microsoft 標準含む）の走査で、翻訳表に無いまま出現した結果コード 12 件を
+洗い出し、**Microsoft Learn の一次資料で検証**した。
+
+判断基準:
+- 一次資料で定数名と意味を確認できる
+- かつ、タスクスケジューラの文脈で意味のある「次の一手」を書ける
+- かつ、kind の定義域（status / sched_error / system / app）に無理なく収まる
+- どれか欠ければ**載せない**（fallback に任せる＝それが正しい扱い）
+
+**結果: 6 件を追加、6 件は fallback に残した。**
+
+### 追加した 6 件（`source:` に検証した URL を持つ）
+
+| コード | 定数 | 出現したタスク |
 |---|---|---|
-| `0x800710E0` | 2 | ERROR_MUI_FILE_NOT_FOUND? 要検証 |
-| `0x40010004` | 2 | DBG_TERMINATE_PROCESS? 成功系 HRESULT の可能性 |
-| `0x80040111` / `0x80040154` | 各1 | CLASS_E / REGDB_E 系。COM 登録まわり |
-| `0x00000420` / `0x10000000` / `0x00002EE7` | 各1 | アプリ独自の終了コードの可能性 |
+| `0x800710E0` | `HRESULT_FROM_WIN32(ERROR_REQUEST_REFUSED)` | DiskCleanup\SilentCleanup, MemoryDiagnostic\ProcessMemoryDiagnosticEvents |
+| `0x80070002` | `HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)` | SystemOptimizerTemp, Location\Notifications |
+| `0x80070032` | `HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)` | Setup\PITRTask |
+| `0x800700B7` | `HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)` | Shell\ThemesSyncedImageDownload |
+| `0x80040111` | `CLASS_E_CLASSNOTAVAILABLE` | MemoryDiagnostic\AutomaticOfflineMemoryDiagnostic |
+| `0x80040154` | `REGDB_E_CLASSNOTREG` | DiskFootprint\StorageSense |
 
-現状これらは fallback で「未知（warning / 調査）」として正しく扱われるため、機能的な穴ではない。
-翻訳できればより具体的な次の一手を出せる、という改善余地。
+COM 系（`0x8004xxxx`）は fallback の `0x8007----` に当たらず**完全な「未知」**だったため、
+追加の効果が最も大きい。`0x8007xxxx` 系は fallback でも `net helpmsg <N>` に誘導できていたので、
+意味をその場で出せるようになった分の改善（severity / rank は fallback と同じまま＝断定を増やさない）。
+
+### 載せなかった 7 件と理由
+
+| コード | 理由 |
+|---|---|
+| `0x40010004` (`DBG_TERMINATE_PROCESS`) | 一次資料で確認できたが **NTSTATUS** で kind の定義域に収まらない。`0x40` は情報severity で is_failure / severity が曖昧。「デバッガが終了させた」から有用な次の一手も書けない。よく言われる「シャットダウンで終了」は一次資料に無い |
+| `0x00000420` (`ERROR_SERVICE_ALREADY_RUNNING`) | デコードは確定だが 1056 は小さい整数で、アプリ独自の `exit(1056)` と区別できない |
+| `0x00002EE7` (`ERROR_INTERNET_NAME_NOT_RESOLVED`) | WinINet 帯だが、返しているのがサードパーティ製 updater でアプリ終了コードの可能性が同程度に残る |
+| `0x10000000` | 一次資料で確認できず |
+| `0x8004EE04` | 一次資料で確認できず（facility=4 は FACILITY_ITF＝アプリ定義領域。OneDrive 独自の可能性が高い） |
+| `0xFFFFFFF8` | 一次資料で確認できず（HRESULT として解釈しても facility が未定義） |
+
+「一次資料で確認できなかった」「確認できても意味のある案内にならない」ものを載せないのは
+**取りこぼしではなく設計判断**。fallback が「未知 / warning / 調査」として正しく扱う
+（＝失敗は失敗として報告し、意味だけを断定しない）。
+
+### 担保
+
+- `source:` を持つエントリは `^https://learn\.microsoft\.com/` を指すことをテストで機械検査
+- 出典 URL 3 本を実際に開き、6 件すべての定数名と説明文が一字一句一致することを確認
+  （テストは URL の形しか見ないため、内容の一致は人が確かめる必要がある）
+- 185 テストパス（失敗 0）
+- 実機で end-to-end 確認（SilentCleanup / PITRTask / ThemesSyncedImageDownload が実際に翻訳される）
+- 載せなかったコードが fallback で「失敗 / 調査」のまま維持されることも確認（隠していない）
 
 ### v1 で見送った項目（VISION には挙がっていたもの）
 
