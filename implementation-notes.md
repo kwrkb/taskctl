@@ -5,7 +5,7 @@
 ## 2026-07-15 (Phase 0)
 
 - **Pester 6.0.0 を採用**（計画では v5）: `Install-Module -MinimumVersion 5.0` で最新の 6.0.0 が入った。v5 系構文と互換であり、ダウングレードして固定するメリットがないためそのまま採用。テストの `#Requires` は `ModuleVersion 5.0` のままにし、v5/v6 どちらでも動く構文で書く。
-- **データの runtime 形式は JSON**（正本は YAML）: 実行時に `powershell-yaml` 依存を持ち込まないため、`build/` で YAML→JSON 変換して同梱する方式。将来の Go 版も同じ JSON を読める。
+- **データの runtime 形式は JSON**（正本は YAML）: 実行時に `powershell-yaml` 依存を持ち込まないため、`build/` で YAML→JSON 変換して同梱する方式。将来の C# 版も同じ JSON を読める。
 
 ## 2026-07-15 (Phase 1)
 
@@ -155,3 +155,115 @@
   重大度を上げる理由にも下げる理由にもならない。実際 `ERROR_ALREADY_EXISTS` や
   `ERROR_REQUEST_REFUSED` は、システム標準タスクでは正常でも出うる。プロースは `0x2` に倣って
   「これだけでは異常とは言えない」とヘッジし、**断定を増やさずに情報だけを増やした**。
+
+## 2026-07-16 (VISION: v2 の実装言語を Go → C# へ変更)
+
+- **v2 を Go から C#（.NET）へ変更した**: 決め手は 2 点で、いずれも一般論ではなく本ツール固有の
+  前提から来る。(1) **Windows 専用と VISION で宣言済み**のため、Go を選ぶ最大の理由である
+  クロスプラットフォームな静的バイナリが不要になる。逆に読む情報源は Windows 固有
+  （CIM 経由の `Get-ScheduledTask`、Operational ログ）で、Go だと PowerShell へのシェルアウトか
+  syscall 自作が要る一方、.NET は標準ライブラリで届く。(2) **v1 の PowerShell は .NET そのもの**
+  であり、C# 行きは実行基盤の継続、Go 行きは異なる言語での書き直し＋グルーコードになる。
+  個人保守ではここが最も効く。
+- **「単一バイナリ配布」は判断材料から外した**: Go 版を望んだ当初の動機だが、C# も NativeAOT で
+  自己完結バイナリを作れるため差にならない。差にならないものを根拠に据えると判断を誤る。
+- **受け入れた代償**: .NET SDK 未インストール（Go 1.26.5 は導入済み）、NativeAOT には MSVC
+  ビルドツールが要る、グローバル設定も Go 前提（module パス規約等）。隠さず VISION に明記した。
+- **AOT リスクを設計制約に変換した**: NativeAOT はリフレクション多用の Windows API（CIM/MI、
+  一部 EventLog 経路）をトリミングで壊しうる。VISION に元々あった「取得層はインターフェースで
+  隔離」を、C# 版では**設計の都合ではなく前提条件**に格上げした（取得をシェルアウトに留める限り
+  AOT は通る）。ネイティブ interop に進むなら先に AOT 実証、と条件を先に書いた。
+- **`Win32Exception(code).Message` は採らなかった**: OS からエラー文言が只で取れるのは C# の利点だが、
+  核心の半分である `SCHED_S_*` / `SCHED_E_*` の HRESULT は確実に引けず、OS 生成訳文は
+  「カタログが文言を所有する」という i18n 設計を迂回する。補助・照合用に留める旨を VISION に補足した。
+- **ドキュメントの Go 前提記述も同時に揃えた**: VISION.md の 3 箇所（i18n の実装言語非依存、技術方針、
+  将来像）に加え、PLAN.md 2 箇所と本ファイル 1 箇所。片方だけ直すと後で矛盾が事実として読まれる。
+- **`Microsoft.Win32.TaskScheduler`（dahall/TaskScheduler）を検討し、見送った**: .NET で Task Scheduler を
+  扱う定番ライブラリだが、3 点で本ツールと噛み合わない。(1) **NativeAOT と両立しない**：
+  実装は `Type.GetTypeFromCLSID` + `Activator.CreateInstance` で COM を実行時に活性化しており、
+  Microsoft は IL3052「COM interop is not supported with full ahead of time compilation」として
+  明記、到達時に実行時例外になる。C# を選んだ前提の一つ（単一バイナリ）が壊れる。
+  (2) **VISION が COM を明示的に対象外にしている**。(3) **write 可能**なため、read-only が
+  「構造的な保証」から「規律」に落ちる。現状は `Export-ScheduledTask` / `Get-ScheduledTaskInfo`
+  しか呼ばず壊しようがないが、`RegisterTaskDefinition` が 1 コール先にあるのは別物。
+  なお名前に反し **Microsoft 製ではない**（NuGet 名 `TaskScheduler` / 作者 dahall / MIT）。
+  加えて売りの一つが localization であり、「カタログが文言を所有する」i18n 境界とも競合する。
+  **採用が正解になる条件**：apply/write に踏み込む、AOT を諦めて framework-dependent 配布にする、
+  XML から取れない情報が必要と判明する。現時点ではどれも該当しない。
+
+## 2026-07-16 (C# 版 v2 実装 / Phase 1-3)
+
+- **取得層は PowerShell シェルアウトに徹した**: COM (`Microsoft.Win32.TaskScheduler` 含む) は
+  NativeAOT で非対応（IL3052）と VISION で結論済みのため、`Export-ScheduledTask` /
+  `Get-ScheduledTaskInfo` を埋込 `acquire.ps1` 経由で呼ぶ設計にした。stdout はコンソールの
+  既定コードページ（PS 5.1 の CP932 等）に化けうるため使わず、UTF-8 ファイル書き出し
+  （`[System.IO.File]::WriteAllText(..., UTF8Encoding(false))`）→ C# 側がファイルを読む方式にした。
+- **`messages.ja.json` はサテライトアセンブリに分離されかけた**: MSBuild は `.ja.` を IETF
+  言語タグと解釈し、`EmbeddedResource` を既定でサテライトアセンブリへ分ける。
+  `GetManifestResourceStream` が本体アセンブリで見つからなくなり実行時エラーになった。
+  `WithCulture="false"` を全埋込リソースに明示して回避。
+- **TFM を `net10.0-windows10.0.17763.0` に固定**: `WindowsIdentity` 等 Windows 専用 API で
+  CA1416（プラットフォーム限定 API 検査）がビルドエラーになった。VISION で「Windows 専用」と
+  明記済みなので、警告を握りつぶすのではなく TFM を正しく宣言する形で解決した。
+  `SupportedOSPlatformVersion` を別指定すると TargetPlatformVersion との不整合で失敗したため、
+  TFM 文字列に直接バージョンを埋め込む形にした。
+- **`--json` の日本語エスケープを `UnsafeRelaxedJsonEscaping` で解除**: 既定の
+  `JsonSerializerOptions` は非 ASCII を `\uXXXX` にエスケープする。PowerShell 版
+  （`ConvertTo-Json` は生の UTF-8 を返す）と挙動を合わせるため、出力用の `JsonSerializerOptions`
+  を分離して encoder を緩めた（データ読み込み用の `DataJsonContext` 既定設定はそのまま）。
+- **未知コードに OS の `Win32Exception` 訳文を補助表示として追加した**（PowerShell 版には無い）。
+  AOT PoC で「`SCHED_S_*` の HRESULT も含め、OS の FormatMessage が日本語文言を返す」ことを実測で
+  確認済み（前回の想定は誤りだった）。ただしカタログを翻訳の正本とする設計は変えず、
+  `os_message` / `参考 (OS)` として分離表示に留めた（本文の `Meaning` には混ぜない）。
+- **`RuleClause.Eq` は `object?` のまま JSON ソースジェネレータで通った**: 逆シリアライズ時は
+  `JsonElement` として保持される。評価器 (`RuleEngine.MatchesEq`) は `JsonElement.ValueKind` で
+  bool/string/number を判定する形にした（rules.json の `eq` は現状すべて bool）。
+  `object` 型プロパティは AOT のリフレクションフリー原則と衝突しそうに見えたが、
+  `JsonSerializable` 経由で問題なく動いた。
+- **実機 69 タスクで PowerShell v1 と完全一致を確認**: `scanned=69 / errors=0 / warnings=13 /
+  notices=107 / exit_code=2` が両実装で一致。取得層・XML 正規化・ルールエンジン・結果コード解決の
+  移植が対症療法ではなく本当に等価であることを、単体テストだけでなく実データで裏取りした。
+- **xUnit は internal 型を直接テストする方針にした**（PowerShell 版の `InModuleScope` 相当）。
+  `InternalsVisibleTo` で `Taskctl.Cli.Tests` にだけ公開。fixture XML は `tests/fixtures/` を
+  そのまま参照し複製しない（`CopyToOutputDirectory`）。122件、実行時間1秒未満。
+- **doctor の取得層はテスト時に差し替え可能にした**: `DoctorCommand.Run(args, acquirer: null)` の
+  第2引数に `ITaskAcquirer` を注入できるようにし、PowerShell 版の `Mock -ModuleName Taskctl
+  Get-TaskctlTask` に相当する差し替えを実現。実機・PowerShell 起動なしで doctor の統合テストが走る。
+
+## 2026-07-16 (レビュー対応: 自己レビュー + PR bot レビュー)
+
+- **サービスアカウント判定とプロファイル変数検出を case-insensitive 化**: PowerShell の
+  `-match`/`-eq` は既定で大文字小文字を無視するが、C# 移植で ordinal 比較にしてしまい
+  `NT AUTHORITY\System` や `%userprofile%` を見逃す v1 との挙動差が出ていた（自己レビューで検出）。
+  他の ordinal 比較（LogonType 等）は XML の正準値のみが入るため据え置き。
+- **埋め込み JSON をビルド前に MSBuild ターゲットで生成**（Codex bot P1）: `src/Taskctl/data/*.json`
+  は .gitignore 対象の生成物で、クリーンチェックアウトでは v2 のビルドが失敗していた。
+  csproj の `GenerateDataJson` ターゲット（Inputs/Outputs でインクリメンタル）から
+  `build/Convert-DataToJson.ps1` を呼ぶ。シェルは常在する `powershell.exe`（5.1）を使用
+  — pwsh は .NET SDK だけの環境に無い可能性があるため。5.1 の ConvertTo-Json は
+  キー順・インデント・非 ASCII の \uXXXX エスケープが pwsh と異なるが、v1 (Pester 185件) /
+  v2 (xUnit 133件) 両方でどちらの形式でも全テスト成功を確認済み。JSON 契約は形式差を許容する。
+- **取得層のプロセス処理を堅牢化**（自己レビュー + Gemini bot）: (1) pwsh/powershell 不在時の
+  `Win32Exception` を `InvalidOperationException` へ変換（スタックトレースの素通り防止）、
+  (2) `WaitForExit` に 120 秒タイムアウト（超過時はプロセスツリーごと Kill）、(3) stdout/stderr を
+  非同期で両方ドレイン。Gemini は `RedirectStandardOutput` の削除を提案したが、想定外出力の
+  取りこぼしよりドレインの方が安全側なのでドレインを採用。
+- **不正 XML は `FormatException` に揃える**（Gemini bot）: `XDocument.Parse` の `XmlException` を
+  素通しするとタスク1件の破損 XML でプロセス全体が落ちる。呼び出し元の「このタスクだけ
+  解析失敗として継続」という契約（FormatException）に変換して揃えた。
+- **見送った指摘**: stderr の `StandardErrorEncoding=UTF8` 明示（PS 5.1 はコンソールに CP932 で
+  書くため UTF-8 指定は逆に文字化けする）、展開先 acquire.ps1 の GUID 名化（ユーザー専有
+  Temp の ACL 前提で攻撃面が限定的、固定名はプロセス間キャッシュとして機能）。
+
+## 2026-07-16 (レビュー対応 第2弾: テストのヘルメティック化)
+
+- **DiagnosisContext を導入**（自己レビュー指摘: doctor テストが実時刻・実機ドライブ・実行ユーザーに
+  依存しフレーキー。実測で 1 回 FAIL を観測）: 現在時刻・ドライブ構成・実行ユーザーのスナップショットを
+  1つの型に束ね、`DoctorCommand.Run(args, acquirer, context)` で注入可能にした。実行時は
+  `DiagnosisContext.Live()`。fixture の日時 (2026-07-15) と整合する固定 Now を使うことで、
+  日数経過による stale_last_run 等の誤発火を排除。
+- **コンソール差し替えテストは同一コレクションで直列化**: `Console.SetOut` はプロセス全域のため、
+  xUnit がテストクラスを並列実行すると Doctor/Explain のテストが互いの出力を奪い合う
+  （実際に並列衝突で失敗を観測）。`[Collection("console-redirection")]` で直列化した。
+- **explain --json / CliArgs / LocaleResolver / 取得層全体失敗 (exit 1) のテストを追加**
+  （自己レビュー指摘のテスト欠落。LocaleResolver は既に env/uiCulture が注入可能な設計だった）。

@@ -35,7 +35,22 @@ $ taskctl explain 0x41303
 
 `apply` / `plan` / `write` 全般、COM 実装、GUI、config-as-code デプロイ、複数 PC 集中管理も対象外です。
 
-## インストール
+## 実装は2つある
+
+taskctl には PowerShell モジュール版（v1、安定）と、C# 単一 exe 版（v2、プレビュー）があります。
+どちらも同じデータ資産（翻訳表・検出ルール・日英カタログ）を共有し、`explain` / `doctor` の
+挙動は同一です（実機での突き合わせ済み）。使い方は共通、違いは配布形態と実行環境だけです。
+
+| | v1 (PowerShell) | v2 (C# / .NET) |
+|---|---|---|
+| 状態 | 安定（v1.1） | プレビュー（2.0.0-alpha1） |
+| 配布形態 | モジュール（`.ps1` 一式） | 単一 exe（NativeAOT） |
+| 実行環境 | PowerShell 5.1 / 7 | 単体で動作。取得層のみ内部で `powershell`/`pwsh` を呼ぶ |
+| ビルド | データ変換のみ（`Convert-DataToJson.ps1`） | .NET SDK でコンパイル要 |
+
+迷ったら v1 を使ってください。v2 は配布のしやすさ（単一 exe）を検証中の段階です。
+
+## インストール（v1・PowerShell）
 
 ```powershell
 git clone https://github.com/kwrkb/taskctl.git
@@ -50,6 +65,23 @@ Import-Module .\src\Taskctl\Taskctl.psd1
 **動作要件**: Windows / PowerShell 7 を推奨（5.1 でも動きますが、日本語表示が化ける場合は
 `chcp 65001` するか `pwsh` を使ってください）。ビルド時のみ `powershell-yaml` が必要で、
 未導入なら `Convert-DataToJson.ps1` が自動で入れます。実行時に外部依存はありません。
+
+## インストール（v2・C#）
+
+```powershell
+git clone https://github.com/kwrkb/taskctl.git
+cd taskctl\src\Taskctl.Cli
+
+dotnet publish -c Release
+# -> bin\Release\net10.0-windows10.0.17763.0\win-x64\publish\taskctl.exe
+```
+
+生成された `taskctl.exe` を `PATH` の通った場所に置くだけで使えます（単一 exe、外部依存なし）。
+
+**動作要件**: .NET 10 SDK（ビルド時のみ）、NativeAOT のリンクに MSVC ビルドツール
+（Visual Studio Build Tools の「C++ によるデスクトップ開発」ワークロード）が必要です。
+実行時の要件は PowerShell（5.1 or 7、`Export-ScheduledTask` / `Get-ScheduledTaskInfo` の
+取得に内部で使用）のみで、.NET ランタイムのインストールは不要です（AOT 単一バイナリのため）。
 
 ## 使い方
 
@@ -71,7 +103,8 @@ taskctl explain <code>      # 結果コード単体を翻訳（例: taskctl expl
 ワイルドカード (`Omen*` — 一致した全部を深掘り) が使えます。
 
 PowerShell 流に呼びたい場合は `Invoke-TaskctlDoctor` / `Invoke-TaskctlExplain` を直接使えます
-（`taskctl doctor --lang en` ≡ `Invoke-TaskctlDoctor -Lang en`）。
+（`taskctl doctor --lang en` ≡ `Invoke-TaskctlDoctor -Lang en`）。v1 の `taskctl` 関数と v2 の
+`taskctl.exe` はコマンド形が同一です（`taskctl doctor --lang en --json` はどちらでも同じ出力）。
 
 ### doctor の出力例
 
@@ -192,6 +225,8 @@ $ taskctl doctor MyBackup
 
 ## 開発
 
+### v1 (PowerShell)
+
 ```powershell
 .\build\Convert-DataToJson.ps1   # data/*.yaml -> src/Taskctl/data/*.json
 Invoke-Pester -Path tests        # Pester 5+ が必要
@@ -202,6 +237,20 @@ Invoke-Pester -Path tests        # Pester 5+ が必要
 
 - 翻訳表にコードを足す: `data/registry.yaml`（事実）と `data/messages/*.yaml`（プロース）の両方。一次資料での検証は必須。coverage テストがキーの欠落を検出します。
 - 検出ルールを足す: `data/rules.yaml` にルール、`Get-TaskctlFact` にファクト、カタログにプロース。判定ロジックはコードに散らさず、ファクト算出へ集約してください。
+
+### v2 (C#)
+
+```powershell
+.\build\Convert-DataToJson.ps1                       # v1 と同じ JSON を v2 も埋め込んで使う
+dotnet test .\tests\Taskctl.Cli.Tests\                # xUnit（実機不要、1秒未満）
+dotnet build .\src\Taskctl.Cli\ -p:PublishAot=false   # 開発時は AOT を切って高速ビルド
+```
+
+`ITaskAcquirer` を差し替えれば取得層をモックでき、`tests/fixtures/*.xml` を v1 と共有します
+（翻訳表・検出ルールを足す手順は v1 と同じ。データ資産は両実装で共通）。
+
+コード構成は `src/Taskctl.Cli/{Codes,Findings,Model,Rules,Facts,Doctor,Acquisition,Cli,I18n,Data}/`
+で、取得層（`Acquisition/`）だけが実機依存です。それ以外は正規化モデル上の純粋関数です。
 
 ## ライセンス
 
