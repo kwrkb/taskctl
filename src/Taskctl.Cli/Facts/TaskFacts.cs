@@ -128,7 +128,7 @@ internal static class TaskFacts
         if (id == currentSid) return true;
         if (string.Equals(id, currentName, StringComparison.OrdinalIgnoreCase)) return true;
 
-        // ドメイン修飾なしのアカウント名（"kiwar" と "HOST\user"）
+        // ドメイン修飾なしのアカウント名（"user" と "HOST\user"）
         if (!id.StartsWith("S-1-", StringComparison.Ordinal))
         {
             var leaf = currentName.Contains('\\') ? currentName[(currentName.LastIndexOf('\\') + 1)..] : currentName;

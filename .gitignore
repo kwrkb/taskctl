@@ -5,6 +5,10 @@ src/Taskctl/data/*.json
 bin/
 obj/
 
+# Publish output (NativeAOT single exe) と Release アセット
+build/publish/
+build/*.zip
+
 # Pester / test output
 testResults.xml
 coverage.xml

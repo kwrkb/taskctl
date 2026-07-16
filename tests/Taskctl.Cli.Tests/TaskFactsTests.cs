@@ -25,7 +25,7 @@ public class TaskFactsTests
     [Fact]
     public void 一般ユーザーはサービスアカウントではない()
     {
-        var model = new TaskModel { Principal = new PrincipalModel { UserId = "OMEN16\\kiwar" } };
+        var model = new TaskModel { Principal = new PrincipalModel { UserId = "HOST\\user2" } };
         var facts = TaskFacts.Compute(model, null, FixedNow, "S-1-5-21-1-2-3-1001", "HOST\\user");
         Assert.Equal(false, facts["principal.is_service_account"]);
     }

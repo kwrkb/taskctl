@@ -231,7 +231,7 @@ function Test-TaskctlCurrentUser {
     $id = $UserId.Trim()
     if ($id -eq $CurrentSid) { return $true }
     if ($id -eq $CurrentName) { return $true }
-    # ドメイン修飾なしのアカウント名（"kiwar" と "HOST\user"）
+    # ドメイン修飾なしのアカウント名（"user" と "HOST\user"）
     ($id -notmatch '^S-1-' -and $id -eq (Split-Path $CurrentName -Leaf))
 }
 
