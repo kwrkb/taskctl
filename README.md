@@ -42,19 +42,20 @@ deployment, and multi-PC central management are all out of scope.
 
 ## Two implementations
 
-taskctl ships as a PowerShell module (v1, stable) and a C# single-exe (v2, preview).
+taskctl ships as a C# single-exe (v2, stable) and a PowerShell module (v1, stable).
 Both share the same data assets (code table, detection rules, ja/en catalogs) and
 behave identically for `explain` / `doctor` (verified against real machines).
 The CLI is identical; only the distribution format and runtime environment differ.
 
-| | v1 (PowerShell) | v2 (C# / .NET) |
+| | v2 (C# / .NET) | v1 (PowerShell) |
 |---|---|---|
-| Status | Stable (v1.1) | Preview (2.0.0-alpha1) |
-| Distribution | Module (`.ps1` files) | Single exe (NativeAOT) |
-| Runtime | PowerShell 5.1 / 7 | Standalone. Only the acquisition layer shells out to `powershell` / `pwsh` |
-| Build | Data conversion only (`Convert-DataToJson.ps1`) | Requires .NET SDK to compile |
+| Status | Stable (v2.0) | Stable (v1.1) |
+| Distribution | Single exe (NativeAOT) | Module (`.ps1` files) |
+| Runtime | Standalone. Only the acquisition layer shells out to `powershell` / `pwsh` | PowerShell 5.1 / 7 |
+| Build | Requires .NET SDK to compile (binary also available on Releases) | Data conversion only (`Convert-DataToJson.ps1`) |
 
-When in doubt, use v1. v2 is being validated for ease of distribution (single exe).
+**Default to v2** (shortest install path, no external dependencies). Pick v1 if you
+want to fold it into an existing PowerShell-module workflow.
 
 ## Install (binary, v2 single exe)
 

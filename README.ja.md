@@ -39,18 +39,19 @@ $ taskctl explain 0x41303
 
 ## 実装は2つある
 
-taskctl には PowerShell モジュール版（v1、安定）と、C# 単一 exe 版（v2、プレビュー）があります。
+taskctl には C# 単一 exe 版（v2、安定）と、PowerShell モジュール版（v1、安定）があります。
 どちらも同じデータ資産（翻訳表・検出ルール・日英カタログ）を共有し、`explain` / `doctor` の
 挙動は同一です（実機での突き合わせ済み）。使い方は共通、違いは配布形態と実行環境だけです。
 
-| | v1 (PowerShell) | v2 (C# / .NET) |
+| | v2 (C# / .NET) | v1 (PowerShell) |
 |---|---|---|
-| 状態 | 安定（v1.1） | プレビュー（2.0.0-alpha1） |
-| 配布形態 | モジュール（`.ps1` 一式） | 単一 exe（NativeAOT） |
-| 実行環境 | PowerShell 5.1 / 7 | 単体で動作。取得層のみ内部で `powershell`/`pwsh` を呼ぶ |
-| ビルド | データ変換のみ（`Convert-DataToJson.ps1`） | .NET SDK でコンパイル要 |
+| 状態 | 安定（v2.0） | 安定（v1.1） |
+| 配布形態 | 単一 exe（NativeAOT） | モジュール（`.ps1` 一式） |
+| 実行環境 | 単体で動作。取得層のみ内部で `powershell`/`pwsh` を呼ぶ | PowerShell 5.1 / 7 |
+| ビルド | .NET SDK でコンパイル要（Release からバイナリ入手可） | データ変換のみ（`Convert-DataToJson.ps1`） |
 
-迷ったら v1 を使ってください。v2 は配布のしやすさ（単一 exe）を検証中の段階です。
+**基本は v2** をおすすめします（インストール手順が最短、外部依存なし）。既存の PowerShell
+モジュール運用に組み込むなら v1 を選んでください。
 
 ## 導入（バイナリ・v2 単一 exe）
 
