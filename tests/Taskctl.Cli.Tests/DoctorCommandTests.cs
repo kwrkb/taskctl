@@ -1,14 +1,30 @@
 using System.Text.Json;
 using Taskctl.Acquisition;
 using Taskctl.Cli;
+using Taskctl.Doctor;
 using Taskctl.Model;
 
 namespace Taskctl.Cli.Tests;
 
-// doctor の統合テスト。取得層 (ITaskAcquirer) を差し替え、実機に依存せず検証する。
+// doctor の統合テスト。取得層 (ITaskAcquirer) と環境 (DiagnosisContext) を差し替え、
+// 実行時刻・実機のドライブ構成・実行ユーザーに依存せず検証する（ヘルメティック）。
+// Console.SetOut はプロセス全域のため、コンソールを差し替えるテストは同一コレクションで直列化する。
+[Collection("console-redirection")]
 public class DoctorCommandTests
 {
     private static string FixturePath(string name) => Path.Combine(AppContext.BaseDirectory, "fixtures", name);
+
+    // fixture の日時（2026-07-15 前後）と整合する固定時刻。実時刻を使うと
+    // 日数経過で stale_last_run 等が発火しテストがフレーキーになる。
+    private static readonly DiagnosisContext FixedContext = new()
+    {
+        Now = new DateTime(2026, 7, 15, 12, 0, 0),
+        FixedDrives = new[] { "C" },
+        NetworkDrives = Array.Empty<string>(),
+        LocalDrives = Array.Empty<string>(),
+        CurrentSid = "S-1-5-21-9999999999-8888888888-7777777777-1002",
+        CurrentName = "TESTHOST\\tester",
+    };
 
     private sealed class FakeAcquirer : ITaskAcquirer
     {
@@ -55,7 +71,7 @@ public class DoctorCommandTests
         Console.SetOut(sw);
         try
         {
-            var exit = DoctorCommand.Run(args, acquirer);
+            var exit = DoctorCommand.Run(args, acquirer, FixedContext);
             return (sw.ToString(), exit);
         }
         finally { Console.SetOut(original); }
@@ -170,6 +186,27 @@ public class DoctorCommandTests
         var (text, exit) = RunText(new CliArgs { Command = "doctor", Lang = "ja" }, new FakeAcquirer(acq));
         Assert.Equal(2, exit);
         Assert.Contains("走査 3 タスク", text);
+    }
+
+    private sealed class ThrowingAcquirer : ITaskAcquirer
+    {
+        public List<AcquiredTask> Acquire(string? taskName, bool includeMicrosoft)
+            => throw new InvalidOperationException("PowerShell を起動できませんでした。");
+    }
+
+    [Fact]
+    public void 取得層全体が失敗したら終了コード1()
+    {
+        var swErr = new StringWriter();
+        var originalErr = Console.Error;
+        Console.SetError(swErr);
+        try
+        {
+            var (_, exit) = RunText(new CliArgs { Command = "doctor", Lang = "ja" }, new ThrowingAcquirer());
+            Assert.Equal(1, exit);
+            Assert.Contains("PowerShell を起動できませんでした", swErr.ToString());
+        }
+        finally { Console.SetError(originalErr); }
     }
 
     [Fact]

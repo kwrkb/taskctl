@@ -13,8 +13,7 @@ internal static class DiagnosisEngine
         AcquiredTask acquired,
         string locale,
         bool includeNonFailureResult,
-        DateTime now,
-        IReadOnlyCollection<string> fixedDrives)
+        DiagnosisContext context)
     {
         Findings.Finding? codeFinding = null;
 
@@ -44,9 +43,9 @@ internal static class DiagnosisEngine
         var ruleFindings = new List<RuleFinding>();
         if (acquired.Model is not null)
         {
-            var networkDrives = DriveLetters.Network();
-            var localDrives = DriveLetters.Local();
-            ruleFindings = RuleEngine.Evaluate(acquired.Model, acquired.Info, now, fixedDrives, networkDrives, localDrives);
+            ruleFindings = RuleEngine.Evaluate(acquired.Model, acquired.Info, context.Now,
+                context.FixedDrives, context.NetworkDrives, context.LocalDrives,
+                context.CurrentSid, context.CurrentName);
             foreach (var f in ruleFindings) RuleProseResolver.Resolve(f, locale);
         }
 

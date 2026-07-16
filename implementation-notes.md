@@ -254,3 +254,16 @@
 - **見送った指摘**: stderr の `StandardErrorEncoding=UTF8` 明示（PS 5.1 はコンソールに CP932 で
   書くため UTF-8 指定は逆に文字化けする）、展開先 acquire.ps1 の GUID 名化（ユーザー専有
   Temp の ACL 前提で攻撃面が限定的、固定名はプロセス間キャッシュとして機能）。
+
+## 2026-07-16 (レビュー対応 第2弾: テストのヘルメティック化)
+
+- **DiagnosisContext を導入**（自己レビュー指摘: doctor テストが実時刻・実機ドライブ・実行ユーザーに
+  依存しフレーキー。実測で 1 回 FAIL を観測）: 現在時刻・ドライブ構成・実行ユーザーのスナップショットを
+  1つの型に束ね、`DoctorCommand.Run(args, acquirer, context)` で注入可能にした。実行時は
+  `DiagnosisContext.Live()`。fixture の日時 (2026-07-15) と整合する固定 Now を使うことで、
+  日数経過による stale_last_run 等の誤発火を排除。
+- **コンソール差し替えテストは同一コレクションで直列化**: `Console.SetOut` はプロセス全域のため、
+  xUnit がテストクラスを並列実行すると Doctor/Explain のテストが互いの出力を奪い合う
+  （実際に並列衝突で失敗を観測）。`[Collection("console-redirection")]` で直列化した。
+- **explain --json / CliArgs / LocaleResolver / 取得層全体失敗 (exit 1) のテストを追加**
+  （自己レビュー指摘のテスト欠落。LocaleResolver は既に env/uiCulture が注入可能な設計だった）。
