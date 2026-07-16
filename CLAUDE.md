@@ -1,6 +1,12 @@
 # CLAUDE.md — taskctl
 
-Windows タスクスケジューラ診断ツール。実装は 2 系統: v2 (C# / NativeAOT 単一 exe / 安定) と v1 (PowerShell モジュール / 安定)。データ資産（翻訳表・検出ルール・日英カタログ）は両者で共通。
+Windows タスクスケジューラ診断ツール。実装は 2 系統: **v2 (C# / NativeAOT 単一 exe / 安定・開発中)** と **v1 (PowerShell モジュール / 凍結)**。データ資産（翻訳表・検出ルール・日英カタログ）は両者で共通。
+
+## Development scope
+
+- **新機能は v2 のみ**。`src/Taskctl.Cli/` と `tests/Taskctl.Cli.Tests/` が現行の作業対象。
+- **v1 は凍結**。`src/Taskctl/` と `tests/*.Tests.ps1` は残置（regression safety net）。バグ修正は受け付けるが機能追加は入れない。
+- **データ資産 (`data/`) は共通**。翻訳表・ルール・カタログの追加は v2 と v1 の両テストで緑を維持する必要がある。
 
 ## Commands
 

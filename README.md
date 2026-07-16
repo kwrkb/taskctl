@@ -42,20 +42,23 @@ deployment, and multi-PC central management are all out of scope.
 
 ## Two implementations
 
-taskctl ships as a C# single-exe (v2, stable) and a PowerShell module (v1, stable).
-Both share the same data assets (code table, detection rules, ja/en catalogs) and
-behave identically for `explain` / `doctor` (verified against real machines).
-The CLI is identical; only the distribution format and runtime environment differ.
+taskctl ships as a C# single-exe (v2, actively developed) and a PowerShell module
+(v1, frozen). Both share the same data assets (code table, detection rules, ja/en
+catalogs) and behave identically for `explain` / `doctor` (verified against real
+machines). The CLI is identical; only the distribution format and runtime
+environment differ.
 
 | | v2 (C# / .NET) | v1 (PowerShell) |
 |---|---|---|
-| Status | Stable (v2.0) | Stable (v1.1) |
+| Status | **Active** (v2.0) | **Frozen** — regression fixes only |
 | Distribution | Single exe (NativeAOT) | Module (`.ps1` files) |
 | Runtime | Standalone. Only the acquisition layer shells out to `powershell` / `pwsh` | PowerShell 5.1 / 7 |
 | Build | Requires .NET SDK to compile (binary also available on Releases) | Data conversion only (`Convert-DataToJson.ps1`) |
 
-**Default to v2** (shortest install path, no external dependencies). Pick v1 if you
-want to fold it into an existing PowerShell-module workflow.
+**Use v2.** v1 still works and is kept in the repo (with its tests running in CI
+as a regression safety net), but no new features will land there — all future
+development happens in v2. Data assets (`data/`) remain shared, so translation
+table and rule additions continue to reach v1 too.
 
 ## Install (binary, v2 single exe)
 
