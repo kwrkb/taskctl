@@ -10,6 +10,9 @@ namespace Taskctl.Acquisition;
 // VISION の「取得層はインターフェースで隔離」を、C# 版ではこの一点に集約する。
 internal sealed class PowerShellTaskAcquirer : ITaskAcquirer
 {
+    // 全タスク走査（数百件）でも余裕を持って終わる長さ。ハング時の無限待ちだけを防ぐ。
+    private const int TimeoutMs = 120_000;
+
     public List<AcquiredTask> Acquire(string? taskName, bool includeMicrosoft)
     {
         var scriptPath = ExtractScript();
@@ -43,10 +46,32 @@ internal sealed class PowerShellTaskAcquirer : ITaskAcquirer
             psi.ArgumentList.Add("-OutFile");
             psi.ArgumentList.Add(outFile);
 
-            using var process = Process.Start(psi)
-                ?? throw new InvalidOperationException("PowerShell を起動できませんでした。");
-            var stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit();
+            Process? process;
+            try
+            {
+                process = Process.Start(psi);
+            }
+            catch (System.ComponentModel.Win32Exception ex)
+            {
+                throw new InvalidOperationException($"PowerShell を起動できませんでした ({psi.FileName}): {ex.Message}");
+            }
+            if (process is null) throw new InvalidOperationException("PowerShell を起動できませんでした。");
+
+            string stderr;
+            using (process)
+            {
+                // stdout / stderr の両方をドレインしないと、想定外の出力がパイプバッファを
+                // 埋めた際に双方が待ち合うデッドロックになりうる
+                var stdoutTask = process.StandardOutput.ReadToEndAsync();
+                var stderrTask = process.StandardError.ReadToEndAsync();
+                if (!process.WaitForExit(TimeoutMs))
+                {
+                    try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+                    throw new InvalidOperationException($"タスクの取得がタイムアウトしました（{TimeoutMs / 1000} 秒）。");
+                }
+                stderr = stderrTask.GetAwaiter().GetResult();
+                stdoutTask.GetAwaiter().GetResult();
+            }
 
             if (!File.Exists(outFile))
             {

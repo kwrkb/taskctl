@@ -229,3 +229,28 @@
 - **doctor の取得層はテスト時に差し替え可能にした**: `DoctorCommand.Run(args, acquirer: null)` の
   第2引数に `ITaskAcquirer` を注入できるようにし、PowerShell 版の `Mock -ModuleName Taskctl
   Get-TaskctlTask` に相当する差し替えを実現。実機・PowerShell 起動なしで doctor の統合テストが走る。
+
+## 2026-07-16 (レビュー対応: 自己レビュー + PR bot レビュー)
+
+- **サービスアカウント判定とプロファイル変数検出を case-insensitive 化**: PowerShell の
+  `-match`/`-eq` は既定で大文字小文字を無視するが、C# 移植で ordinal 比較にしてしまい
+  `NT AUTHORITY\System` や `%userprofile%` を見逃す v1 との挙動差が出ていた（自己レビューで検出）。
+  他の ordinal 比較（LogonType 等）は XML の正準値のみが入るため据え置き。
+- **埋め込み JSON をビルド前に MSBuild ターゲットで生成**（Codex bot P1）: `src/Taskctl/data/*.json`
+  は .gitignore 対象の生成物で、クリーンチェックアウトでは v2 のビルドが失敗していた。
+  csproj の `GenerateDataJson` ターゲット（Inputs/Outputs でインクリメンタル）から
+  `build/Convert-DataToJson.ps1` を呼ぶ。シェルは常在する `powershell.exe`（5.1）を使用
+  — pwsh は .NET SDK だけの環境に無い可能性があるため。5.1 の ConvertTo-Json は
+  キー順・インデント・非 ASCII の \uXXXX エスケープが pwsh と異なるが、v1 (Pester 185件) /
+  v2 (xUnit 133件) 両方でどちらの形式でも全テスト成功を確認済み。JSON 契約は形式差を許容する。
+- **取得層のプロセス処理を堅牢化**（自己レビュー + Gemini bot）: (1) pwsh/powershell 不在時の
+  `Win32Exception` を `InvalidOperationException` へ変換（スタックトレースの素通り防止）、
+  (2) `WaitForExit` に 120 秒タイムアウト（超過時はプロセスツリーごと Kill）、(3) stdout/stderr を
+  非同期で両方ドレイン。Gemini は `RedirectStandardOutput` の削除を提案したが、想定外出力の
+  取りこぼしよりドレインの方が安全側なのでドレインを採用。
+- **不正 XML は `FormatException` に揃える**（Gemini bot）: `XDocument.Parse` の `XmlException` を
+  素通しするとタスク1件の破損 XML でプロセス全体が落ちる。呼び出し元の「このタスクだけ
+  解析失敗として継続」という契約（FormatException）に変換して揃えた。
+- **見送った指摘**: stderr の `StandardErrorEncoding=UTF8` 明示（PS 5.1 はコンソールに CP932 で
+  書くため UTF-8 指定は逆に文字化けする）、展開先 acquire.ps1 の GUID 名化（ユーザー専有
+  Temp の ACL 前提で攻撃面が限定的、固定名はプロセス間キャッシュとして機能）。

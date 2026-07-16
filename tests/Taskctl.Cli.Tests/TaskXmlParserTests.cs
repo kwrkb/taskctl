@@ -27,6 +27,14 @@ public class TaskXmlParserTests
     }
 
     [Fact]
+    public void 不正なXMLでもFormatExceptionに揃える()
+    {
+        // 呼び出し元は FormatException を「このタスクだけ解析失敗」として継続する。
+        // XmlException が素通りするとプロセス全体が落ちる。
+        Assert.Throws<FormatException>(() => TaskXmlParser.Parse("not xml at all <<"));
+    }
+
+    [Fact]
     public void normal_操作を取り出す()
     {
         var m = Read("normal.xml");

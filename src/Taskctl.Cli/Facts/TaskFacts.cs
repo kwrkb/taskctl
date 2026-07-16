@@ -68,7 +68,8 @@ internal static class TaskFacts
             var userId = model.Principal.UserId ?? "";
             facts["principal.is_service_account"] =
                 userId is "S-1-5-18" or "S-1-5-19" or "S-1-5-20" ||
-                System.Text.RegularExpressions.Regex.IsMatch(userId, @"^(NT AUTHORITY\\)?(SYSTEM|LOCAL SERVICE|NETWORK SERVICE)$");
+                System.Text.RegularExpressions.Regex.IsMatch(userId, @"^(NT AUTHORITY\\)?(SYSTEM|LOCAL SERVICE|NETWORK SERVICE)$",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             facts["principal.logon_type_interactive"] = model.Principal.LogonType == "InteractiveToken";
             // taskctl を動かしている本人のタスクか。本人のタスクに限れば、taskctl の文脈での
             // パス存在チェックは「タスクが走る文脈」とほぼ一致し、Test-Path の結果を信頼できる。

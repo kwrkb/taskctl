@@ -11,7 +11,17 @@ internal static class TaskXmlParser
 
     public static TaskModel Parse(string xml, string? taskName = null, string? taskPath = null)
     {
-        var doc = XDocument.Parse(xml);
+        XDocument doc;
+        try
+        {
+            doc = XDocument.Parse(xml);
+        }
+        catch (System.Xml.XmlException ex)
+        {
+            // 呼び出し元は FormatException を「このタスクだけ解析失敗」として扱う。
+            // XmlException を素通しするとプロセス全体が落ちる。
+            throw new FormatException($"タスク XML の解析に失敗しました: {ex.Message}", ex);
+        }
         var task = doc.Root;
         if (task is null || task.Name != Ns + "Task")
         {

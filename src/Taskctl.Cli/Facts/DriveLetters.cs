@@ -13,8 +13,10 @@ internal static class DriveLetters
                 .Select(d => d.Name.Substring(0, 1).ToUpperInvariant())
                 .ToArray();
         }
-        catch (IOException)
+        catch (Exception)
         {
+            // IOException のほか UnauthorizedAccessException 等もありうる。
+            // ドライブ一覧が取れなくても診断自体は続行できる（v1 も全例外を握って空を返す）。
             return Array.Empty<string>();
         }
     }

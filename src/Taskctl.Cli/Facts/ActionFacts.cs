@@ -95,7 +95,8 @@ internal static partial class ActionFacts
 
         facts["action.uses_unc_path"] = UncPathRegex().IsMatch(allText);
 
-        facts["action.uses_profile_variable"] = ProfileVars.Any(v => allText.Contains(v, StringComparison.Ordinal));
+        // 環境変数参照は大文字小文字を区別しない（%userprofile% も有効）
+        facts["action.uses_profile_variable"] = ProfileVars.Any(v => allText.Contains(v, StringComparison.OrdinalIgnoreCase));
 
         // ---- 起動指定 ----
         var leaf = Path.GetFileName(command);
