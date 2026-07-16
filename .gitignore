@@ -1,6 +1,10 @@
 # Build artifacts (YAML→JSON 変換の生成物)
 src/Taskctl/data/*.json
 
+# .NET (v2 / Taskctl.Cli)
+bin/
+obj/
+
 # Pester / test output
 testResults.xml
 coverage.xml

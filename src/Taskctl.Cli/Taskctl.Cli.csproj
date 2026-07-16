@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- VISION: Windows 専用ツール。TFM に -windows を付けて CA1416（プラットフォーム限定 API 検査）
+         を有効なチェックとして機能させる（警告の握りつぶしではなく、対象を正しく宣言する）。 -->
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <RootNamespace>Taskctl</RootNamespace>
+    <AssemblyName>taskctl</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <PublishAot>true</PublishAot>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <StripSymbols>true</StripSymbols>
+    <Version>2.0.0-alpha1</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 型はすべて internal。xUnit テストプロジェクトからだけ見えるようにする。 -->
+    <InternalsVisibleTo Include="Taskctl.Cli.Tests" />
+  </ItemGroup>
+
+  <!--
+    データ資産（言語非依存レジストリ、日英カタログ、ルール）を単一 exe に埋め込む。
+    正本は data/*.yaml、生成先は src/Taskctl/data/*.json（PowerShell v1 と共有）。
+    Link を使い、ファイル名だけを埋め込みリソース名にする（相対パスを混ぜない）。
+  -->
+  <ItemGroup>
+    <!--
+      WithCulture=false は必須。MSBuild は "messages.ja.json" の ".ja." を IETF 言語タグと
+      解釈してサテライトアセンブリ (ja\taskctl.resources.dll) に分けてしまい、
+      GetManifestResourceStream("messages.ja.json") が本体アセンブリで見つからなくなる。
+      ここではロケール切替をコード側で行うため、リソースは全て本体アセンブリに埋める。
+    -->
+    <EmbeddedResource Include="..\Taskctl\data\registry.json" LogicalName="registry.json" WithCulture="false" />
+    <EmbeddedResource Include="..\Taskctl\data\rules.json" LogicalName="rules.json" WithCulture="false" />
+    <EmbeddedResource Include="..\Taskctl\data\messages.ja.json" LogicalName="messages.ja.json" WithCulture="false" />
+    <EmbeddedResource Include="..\Taskctl\data\messages.en.json" LogicalName="messages.en.json" WithCulture="false" />
+    <!-- 取得層が呼び出す PowerShell スクリプト（COM を避け、read-only なシェルアウトに徹する）。 -->
+    <EmbeddedResource Include="Acquisition\acquire.ps1" LogicalName="acquire.ps1" WithCulture="false" />
+  </ItemGroup>
+
+</Project>
