@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(git status:*)",
+      "PowerShell(git log:*)",
+      "PowerShell(git diff:*)",
+      "PowerShell(git show:*)",
+      "PowerShell(git branch:*)",
+      "PowerShell(git fetch:*)",
+      "PowerShell(git remote:*)",
+      "PowerShell(git tag:*)",
+      "PowerShell(gh pr view:*)",
+      "PowerShell(gh pr list:*)",
+      "PowerShell(gh pr diff:*)",
+      "PowerShell(gh pr checks:*)",
+      "PowerShell(gh release view:*)",
+      "PowerShell(gh release list:*)",
+      "PowerShell(gh repo view:*)",
+      "PowerShell(gh run view:*)",
+      "PowerShell(gh run list:*)",
+      "PowerShell(gh api /repos:*)",
+      "PowerShell(schtasks /query:*)"
+    ]
+  }
+}

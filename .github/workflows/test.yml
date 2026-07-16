@@ -1,0 +1,34 @@
+name: test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Pester 5+
+        shell: pwsh
+        run: Install-Module Pester -MinimumVersion 5.0 -Force -SkipPublisherCheck
+
+      - name: Convert data assets (YAML -> JSON)
+        shell: pwsh
+        run: .\build\Convert-DataToJson.ps1
+
+      - name: xUnit tests (v2)
+        run: dotnet test tests/Taskctl.Cli.Tests --verbosity minimal
+
+      - name: Pester tests (v1)
+        shell: pwsh
+        run: |
+          Import-Module Pester -MinimumVersion 5.0
+          $r = Invoke-Pester -Path tests -Output Detailed -PassThru
+          if ($r.FailedCount -gt 0) { exit 1 }

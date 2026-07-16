@@ -2,6 +2,8 @@
 
 > **[English](README.md)** / 日本語
 
+[![test](https://github.com/kwrkb/taskctl/actions/workflows/test.yml/badge.svg)](https://github.com/kwrkb/taskctl/actions/workflows/test.yml)
+
 Windows タスクスケジューラで **タスクが失敗した / 失敗しそうな理由を特定し、「次に何をやればいいか」を具体的に示す** 診断ツール。
 
 設定は自分では変更しません（read-only）。出力は**日本語・英語**に対応します。

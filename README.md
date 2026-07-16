@@ -2,6 +2,8 @@
 
 > English / **[日本語](README.ja.md)**
 
+[![test](https://github.com/kwrkb/taskctl/actions/workflows/test.yml/badge.svg)](https://github.com/kwrkb/taskctl/actions/workflows/test.yml)
+
 A diagnostic tool for Windows Task Scheduler that **pinpoints why a task failed (or is likely to fail) and tells you what to do next**.
 
 It never changes any settings (read-only). Output is available in **English and Japanese**.
