@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.Json;
 
@@ -9,7 +10,7 @@ internal static class DataStore
 {
     private static Registry? _registry;
     private static RulesFile? _rules;
-    private static readonly Dictionary<string, Catalog> _catalogs = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, Catalog> _catalogs = new(StringComparer.OrdinalIgnoreCase);
     private static string[]? _supportedLocales;
 
     public static Registry GetRegistry()
@@ -19,12 +20,7 @@ internal static class DataStore
         => _rules ??= Load("rules.json", DataJsonContext.Default.RulesFile);
 
     public static Catalog GetCatalog(string locale)
-    {
-        if (_catalogs.TryGetValue(locale, out var cached)) return cached;
-        var cat = Load($"messages.{locale}.json", DataJsonContext.Default.Catalog);
-        _catalogs[locale] = cat;
-        return cat;
-    }
+        => _catalogs.GetOrAdd(locale, static l => Load($"messages.{l}.json", DataJsonContext.Default.Catalog));
 
     public static IReadOnlyList<string> GetSupportedLocales()
     {
