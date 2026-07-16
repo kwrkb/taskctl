@@ -42,4 +42,18 @@
     <EmbeddedResource Include="Acquisition\acquire.ps1" LogicalName="acquire.ps1" WithCulture="false" />
   </ItemGroup>
 
+  <!--
+    埋め込む JSON は正本 YAML からの生成物で、リポジトリにはコミットされない（.gitignore 対象）。
+    クリーンチェックアウトでも dotnet build/test/publish が通るよう、ビルド前に生成する。
+    Inputs/Outputs によりインクリメンタル（YAML 未変更ならスキップ）。
+  -->
+  <ItemGroup>
+    <DataYamlSource Include="..\..\data\registry.yaml;..\..\data\rules.yaml;..\..\data\messages\*.yaml" />
+  </ItemGroup>
+  <Target Name="GenerateDataJson" BeforeTargets="PrepareForBuild"
+          Inputs="@(DataYamlSource);..\..\build\Convert-DataToJson.ps1"
+          Outputs="..\Taskctl\data\registry.json;..\Taskctl\data\rules.json;..\Taskctl\data\messages.ja.json;..\Taskctl\data\messages.en.json">
+    <Exec Command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\build\Convert-DataToJson.ps1&quot;" />
+  </Target>
+
 </Project>
