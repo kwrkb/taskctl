@@ -4,7 +4,6 @@ using System.Text.Json.Serialization.Metadata;
 using Taskctl.Acquisition;
 using Taskctl.Data;
 using Taskctl.Doctor;
-using Taskctl.Facts;
 using Taskctl.I18n;
 
 namespace Taskctl.Cli;
@@ -18,7 +17,7 @@ internal static class DoctorCommand
         WriteIndented = true,
     };
 
-    public static int Run(CliArgs args, ITaskAcquirer? acquirer = null)
+    public static int Run(CliArgs args, ITaskAcquirer? acquirer = null, DiagnosisContext? context = null)
     {
         var locale = LocaleResolver.Resolve(args.Lang);
         bool deepDive = !string.IsNullOrWhiteSpace(args.Positional);
@@ -36,10 +35,9 @@ internal static class DoctorCommand
             return 1;
         }
 
-        var now = DateTime.Now;
-        var fixedDrives = DriveLetters.Fixed();
+        context ??= DiagnosisContext.Live();
         var results = acquired
-            .Select(a => DiagnosisEngine.Diagnose(a, locale, deepDive, now, fixedDrives))
+            .Select(a => DiagnosisEngine.Diagnose(a, locale, deepDive, context))
             .ToList();
 
         // 終了コード: error -> 3, warning -> 2, それ以外 -> 0
