@@ -33,8 +33,7 @@ CI (`.github/workflows/test.yml`) が push/PR ごとに両方走らせる。
 
 - `VISION.md` — 何を作るか / 作らないか
 - `PLAN.md` — 進捗ログ（v1 / v2 の Phase 単位）
-- `LESSONS.md` — 過去にハマった罠（読むだけで数時間節約できる）
-- `implementation-notes.md` — 判断ログ
+- `LESSONS.md` — 過去にハマった罠（読むだけで数時間節約できる）＋ 末尾に判断ログ
 
 ## Gotchas
 
