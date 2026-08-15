@@ -472,3 +472,31 @@ Pester の `-ForEach` で `Input` というキーを使ったところ、自動�
   のままトリミング警告（IL2026 / IL3050 等）も出ず、生成ターゲットを足す理由が観測できなかった。
 - 覆す条件: publish 済み exe でバージョンが空や `unknown` になる（＝属性がトリムされる）ことを
   観測したら、生成した const へ切り替える。テストは `VersionInfo.Value` が空にならないことを見ている。
+
+## 2026-08-16: Scoop の manifest は bucket リポジトリ直下ではなく `bucket/` に置く
+
+- 却下した案: `release.yml` の publish ステップを従来どおり `Copy-Item taskctl.json
+  bucket-repo/taskctl.json` のままにする。`scoop install` / `scoop info` は直下レイアウトでも動くため
+  （`Find-BucketDirectory` が `bucket/` 非存在時にリポジトリルートへフォールバックする）、実害は
+  `scoop bucket list` の表示だけに見えた。
+- 決め手: `scoop bucket list` の Manifests 列が kwrkb だけ **0** だった（main 1628 / extras 2366 /
+  java 336 は非0）。`scoop/apps/scoop/current/lib/buckets.ps1:116` が `Get-ChildItem "$path\bucket"`
+  しか数えないため。表示だけの問題でもなく、同ファイルの `apps_in_bucket` は
+  `Get-ChildItem $dir -Filter '*.json' -Recurse` なので、直下レイアウトではリポジトリ内の無関係な
+  JSON まで**パッケージとして拾う**。さらに `Find-BucketDirectory`（同 23-25 行）は `bucket/` が
+  存在すればそこ**だけ**を見るため直下と混在できず、bucket リポジトリの `git mv` と publish 側
+  3 リポジトリ（taskctl / ssh-pushkey / rdp-host-info）を同時に移行する必要があった。移行後
+  `scoop bucket list` が `kwrkb 3`、`scoop info taskctl` が 2.0.2 を解決することを確認した。
+- 覆す条件: scoop 本体が直下レイアウトも Manifests 列に数え、かつ `apps_in_bucket` の走査対象を
+  manifest 相当ファイルに限定するようになった場合。
+
+## 2026-08-16: 他プロジェクトのコード内コメントを一次情報として信用しない
+
+- 却下した案: 先行して同じ bucket へ publish していた ssh-pushkey の `.goreleaser.yaml` コメント
+  （「directory は指定しない。サブディレクトリに置くと `scoop bucket list` が 0 manifests と表示される
+  ため、GoReleaser 公式もリポジトリ直下を推奨している」）を根拠に、直下レイアウトを踏襲し続ける。
+  taskctl の publish ステップはこの前提を引き継いで書かれていた。
+- 決め手: このコメントは事実と逆だった。実測では**直下**の kwrkb が 0 manifests で、`bucket/` を使う
+  公式バケット（main / extras / java）は正しく数えられていた。検証されないまま複製されたことで、
+  誤った前提が 3 リポジトリへ伝播していた。`lib/buckets.ps1` を読めば否定できる内容だった。
+- 覆す条件: なし。外部ツールの挙動を設定の根拠にするときは、実装ソースか実測のどちらかで裏を取る。
