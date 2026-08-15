@@ -25,6 +25,20 @@ public class CliArgsTests
         Assert.Equal("help", CliArgs.Parse(new[] { "doctor", "--help" }).Command);
     }
 
+    [Theory]
+    [InlineData("--version")]
+    [InlineData("version")]
+    public void バージョン指定はversionコマンドになる(string arg)
+    {
+        Assert.Equal("version", CliArgs.Parse(new[] { arg }).Command);
+    }
+
+    [Fact]
+    public void コマンド後のバージョンフラグもversionになる()
+    {
+        Assert.Equal("version", CliArgs.Parse(new[] { "doctor", "--version" }).Command);
+    }
+
     [Fact]
     public void 位置引数とフラグを混在してパースできる()
     {

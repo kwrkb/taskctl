@@ -119,6 +119,7 @@ taskctl explain <code>      # 結果コード単体を翻訳（例: taskctl expl
   --lang ja|en   表示言語（既定は環境/OSから決定、最終フォールバックは en）
   --json         構造化出力（常に UTF-8）
   --verbose      生の設定も表示
+  --version      バージョンを表示（`taskctl version` も同じ）
 ```
 
 `explain` は 16進 (`0x41303`) / 10進 (`267011`) / 符号付き10進 (`-2147024891`) のいずれも受け付けます。

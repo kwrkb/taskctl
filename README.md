@@ -129,6 +129,7 @@ Common flags:
   --lang ja|en   Display language (default is inferred from env/OS, final fallback is en)
   --json         Structured output (always UTF-8)
   --verbose      Also show raw settings
+  --version      Print the version (`taskctl version` works too)
 ```
 
 `explain` accepts hex (`0x41303`), decimal (`267011`), or signed decimal
