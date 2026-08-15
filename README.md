@@ -60,6 +60,15 @@ as a regression safety net), but no new features will land there — all future
 development happens in v2. Data assets (`data/`) remain shared, so translation
 table and rule additions continue to reach v1 too.
 
+## Install (Scoop)
+
+```powershell
+scoop bucket add kwrkb https://github.com/kwrkb/scoop-bucket
+scoop install taskctl
+```
+
+`scoop update taskctl` picks up new releases.
+
 ## Install (binary, v2 single exe)
 
 No .NET SDK needed. Just download the zip from GitHub Releases and extract.

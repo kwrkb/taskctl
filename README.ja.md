@@ -54,6 +54,15 @@ taskctl には C# 単一 exe 版（v2、開発中）と、PowerShell モジュ�
 以後の新機能は入りません（すべて v2 に入ります）。データ資産 (`data/`) は共通なので、
 翻訳表やルールの追加は引き続き v1 にも反映されます。
 
+## 導入（Scoop）
+
+```powershell
+scoop bucket add kwrkb https://github.com/kwrkb/scoop-bucket
+scoop install taskctl
+```
+
+新しいリリースは `scoop update taskctl` で取り込めます。
+
 ## 導入（バイナリ・v2 単一 exe）
 
 .NET SDK 不要。GitHub Releases から zip をダウンロードして展開するだけで使えます。
