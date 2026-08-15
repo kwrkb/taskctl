@@ -220,6 +220,7 @@ COM 系（`0x8004xxxx`）は fallback の `0x8007----` に当たらず**完全�
 - 2026-08-15: **Scoop 配布を追加**（PR #3）。`release.yml` がタグ push で manifest を `kwrkb/scoop-bucket` へ発行し、`scoop bucket add kwrkb ... && scoop install taskctl` で導入できる。bucket 用トークンは 1Password service account（`load-secrets-action@v5`）から供給。prerelease タグ（`-` を含む）では Scoop ステップをスキップし、Release 作成は再実行できるよう冪等化
 - 2026-08-15: **メンテナンス**。両テスト緑を確認（xUnit 157 / Pester 185）。CI の Actions を更新（`checkout@v4→v7`、`setup-dotnet@v4→v6`。checkout v5+ の破壊的変更は `pull_request_target` 限定で本リポは非該当）。リリース成果物のバージョンをタグ由来（`-p:Version=`）にし、csproj の値が古びてもズレない構造にした（従来は `2.0.0-alpha1` のまま v2.0.1 を配布していた）
 - 2026-08-15: **`taskctl --version` を追加**（`taskctl version` も同じ）。バイナリ配布を始めた以上、利用者が自分の版を確かめられずバグ報告に版が欠ける。NativeAOT publish した実 exe で出力を確認（xUnit 163 / Pester 185 パス）
+- 2026-08-16: **Scoop manifest の出力先を `bucket/` へ移動**。`release.yml` の publish ステップがリポジトリ直下に書いていたが、scoop は `bucket/` が存在するとそこだけを見るため、`kwrkb/scoop-bucket` と publish 側 3 リポジトリ（本リポジトリ / ssh-pushkey / rdp-host-info）を同時に移行した。移行後 `scoop bucket list` が `kwrkb 3`、`scoop info taskctl` が 2.0.2 を解決することを確認。根拠は `LESSONS.md`
 
 ## v1 の到達点
 
