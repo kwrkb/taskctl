@@ -10,9 +10,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -21,7 +21,12 @@ jobs:
         run: .\build\Convert-DataToJson.ps1
 
       - name: Publish NativeAOT single exe
-        run: dotnet publish src/Taskctl.Cli -c Release -o build/publish
+        shell: pwsh
+        run: |
+          # Take the version from the tag so the binary can never disagree with the
+          # release it ships in (the csproj default is only for local builds).
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          dotnet publish src/Taskctl.Cli -c Release -o build/publish -p:Version=$version
 
       - name: Package zip
         shell: pwsh

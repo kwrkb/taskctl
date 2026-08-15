@@ -14,7 +14,9 @@
     <PublishAot>true</PublishAot>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <StripSymbols>true</StripSymbols>
-    <Version>2.0.0-alpha1</Version>
+    <!-- ローカルビルド時の既定値。リリースはタグから -p:Version で上書きするため、
+         ここが古びてもリリース成果物のバージョンはズレない（release.yml を参照）。 -->
+    <Version>2.0.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
