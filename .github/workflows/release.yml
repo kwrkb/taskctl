@@ -107,11 +107,15 @@ jobs:
         shell: pwsh
         run: |
           git clone "https://x-access-token:$env:SCOOP_GITHUB_TOKEN@github.com/kwrkb/scoop-bucket.git" bucket-repo
-          Copy-Item taskctl.json bucket-repo/taskctl.json -Force
+          # manifest は bucket/ の下に置く。scoop の `bucket list` は <repo>\bucket 配下しか
+          # 数えず（lib/buckets.ps1）、Find-BucketDirectory も bucket/ があればそこだけを見る。
+          # リポジトリ直下に書くと scoop から完全に無視される。
+          New-Item -ItemType Directory -Force -Path bucket-repo/bucket | Out-Null
+          Copy-Item taskctl.json bucket-repo/bucket/taskctl.json -Force
           Set-Location bucket-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add taskctl.json
+          git add bucket/taskctl.json
           # `if (<native cmd>)` tests stdout, not the exit code, so --quiet would always
           # take the else branch and fail on re-tag with "nothing to commit".
           if (git status --porcelain) {
