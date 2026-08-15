@@ -30,11 +30,25 @@ jobs:
           Compress-Archive -Path build/publish/taskctl.exe -DestinationPath $zip -Force
           "ASSET=$zip" | Add-Content $env:GITHUB_ENV
 
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME $env:ASSET --title $env:GITHUB_REF_NAME --generate-notes
+        run: |
+          # Idempotent so the Scoop steps below stay retryable: if publishing the
+          # manifest fails, re-running the workflow for the same tag must not die
+          # here with "release already exists".
+          $prev = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          gh release view $env:GITHUB_REF_NAME 2>&1 | Out-Null
+          $exists = ($LASTEXITCODE -eq 0)
+          $ErrorActionPreference = $prev
+          if ($exists) {
+            Write-Host "Release $env:GITHUB_REF_NAME already exists; updating asset."
+            gh release upload $env:GITHUB_REF_NAME $env:ASSET --clobber
+          } else {
+            gh release create $env:GITHUB_REF_NAME $env:ASSET --title $env:GITHUB_REF_NAME --generate-notes
+          }
 
       - name: Load Scoop bucket token
         if: ${{ !contains(github.ref_name, '-') }}
