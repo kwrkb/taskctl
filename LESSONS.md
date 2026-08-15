@@ -453,3 +453,22 @@ Pester の `-ForEach` で `Input` というキーを使ったところ、自動�
   （実際に並列衝突で失敗を観測）。`[Collection("console-redirection")]` で直列化した。
 - **explain --json / CliArgs / LocaleResolver / 取得層全体失敗 (exit 1) のテストを追加**
   （自己レビュー指摘のテスト欠落。LocaleResolver は既に env/uiCulture が注入可能な設計だった）。
+
+## 2026-08-15: リリース成果物のバージョンはタグから渡す
+
+- 却下した案: 従来どおり csproj の `<Version>` をリリースのたびに手で上げる。
+- 決め手: v2.0.1 として配布した exe の中身が `2.0.0-alpha1` のままだった（更新漏れが実際に起きていた）。
+  `dotnet build -p:Version=9.9.9` した dll の FileVersion が `9.9.9.0` になることを確認したので、
+  publish 時にタグから渡せば二重管理そのものが消える。csproj の値はローカルビルドの既定値に降格。
+- 覆す条件: タグ名と成果物バージョンを意図的にずらす必要が出た場合（例: 同一コードを別版として再配布）。
+
+## 2026-08-15: `--version` はアセンブリ属性のリフレクション取得で足りる
+
+- 却下した案: MSBuild ターゲットで `BuildVersion.g.cs` を生成し `const string` として焼き込む案。
+  NativeAOT はリフレクションを壊しうるため、確実側に倒す発想（既存の `GenerateDataJson` と同じ手口）。
+- 決め手: `AssemblyInformationalVersionAttribute` をリフレクションで読む実装のまま
+  `dotnet publish -c Release -p:Version=2.0.1`（NativeAOT）した実 exe が、`--version` /
+  `version` / `doctor --version` のいずれでも `taskctl 2.0.1` を出力した。`TreatWarningsAsErrors=true`
+  のままトリミング警告（IL2026 / IL3050 等）も出ず、生成ターゲットを足す理由が観測できなかった。
+- 覆す条件: publish 済み exe でバージョンが空や `unknown` になる（＝属性がトリムされる）ことを
+  観測したら、生成した const へ切り替える。テストは `VersionInfo.Value` が空にならないことを見ている。

@@ -14,6 +14,9 @@ try
         case "help":
             Console.Out.WriteLine(Usage.Text);
             return 0;
+        case "version":
+            Console.Out.WriteLine(VersionInfo.Text);
+            return 0;
         case "explain":
             return ExplainCommand.Run(parsed);
         case "doctor":

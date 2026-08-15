@@ -22,6 +22,11 @@ internal sealed class CliArgs
             return new CliArgs { Command = "help" };
         }
 
+        if (first is "--version" or "version")
+        {
+            return new CliArgs { Command = "version" };
+        }
+
         string command = first;
         string? positional = null;
         string? lang = null;
@@ -52,6 +57,11 @@ internal sealed class CliArgs
             else if (a is "--help" or "-h")
             {
                 return new CliArgs { Command = "help" };
+            }
+            // --help と同じく、どのコマンドの後ろに置いても効く（片方だけ弾くと驚く）。
+            else if (a == "--version")
+            {
+                return new CliArgs { Command = "version" };
             }
             else if (a.StartsWith("--", StringComparison.Ordinal))
             {
