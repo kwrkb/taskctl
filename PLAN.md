@@ -215,6 +215,10 @@ COM 系（`0x8004xxxx`）は fallback の `0x8007----` に当たらず**完全�
 - 2026-07-16: **PR #2 マージ = v2 (C#) 本線統合**。https://github.com/kwrkb/taskctl/pull/2（57 ファイル、+4213 行、コミット 3 件）。master が v1 (PowerShell) と v2 (C#) の両実装を持つ状態になった
 - 2026-07-16: **v2.0.0 リリース公開**。https://github.com/kwrkb/taskctl/releases/tag/v2.0.0 — 初の GitHub Release。NativeAOT 単一 exe を `taskctl-v2.0.0-win-x64.zip`（3.8MB、展開後 8.8MB）として添付。リリース前に xUnit 157 テストパスを確認。タグはマージコミット `82740d7` に付与
 - 2026-07-16: **v1 (PowerShell) 凍結**。以後の feature 開発は v2 (C#) のみ。v1 のソース (`src/Taskctl/`) とテスト (`tests/*.Tests.ps1`) は残置し、CI (`.github/workflows/test.yml`) で Pester も引き続き実行して regression safety net とする。データ資産 (`data/`) は共通なので、翻訳表・ルールの更新は両者に自動的に反映される（追加時は v1 テストが緑を維持する必要あり）
+- 2026-07-16: **v2.0.1 リリース**。`DataStore.GetCatalog` の並列アクセス競合修正（静的な遅延キャッシュが xUnit 並列で race）と README の英語基本化を含む。あわせて CI を自動化（`test.yml`: push/PR で xUnit + Pester、`release.yml`: `v*` タグ push で NativeAOT publish → zip → Release 作成）
+- 2026-07-26: `implementation-notes.md` を `LESSONS.md` へ統合。判断記録の置き場を1つにした
+- 2026-08-15: **Scoop 配布を追加**（PR #3）。`release.yml` がタグ push で manifest を `kwrkb/scoop-bucket` へ発行し、`scoop bucket add kwrkb ... && scoop install taskctl` で導入できる。bucket 用トークンは 1Password service account（`load-secrets-action@v5`）から供給。prerelease タグ（`-` を含む）では Scoop ステップをスキップし、Release 作成は再実行できるよう冪等化
+- 2026-08-15: **メンテナンス**。両テスト緑を確認（xUnit 157 / Pester 185）。CI の Actions を更新（`checkout@v4→v7`、`setup-dotnet@v4→v6`。checkout v5+ の破壊的変更は `pull_request_target` 限定で本リポは非該当）。リリース成果物のバージョンをタグ由来（`-p:Version=`）にし、csproj の値が古びてもズレない構造にした（従来は `2.0.0-alpha1` のまま v2.0.1 を配布していた）
 
 ## v1 の到達点
 
