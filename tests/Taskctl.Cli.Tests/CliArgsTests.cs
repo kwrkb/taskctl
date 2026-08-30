@@ -27,16 +27,19 @@ public class CliArgsTests
 
     [Theory]
     [InlineData("--version")]
+    [InlineData("-v")]
     [InlineData("version")]
     public void バージョン指定はversionコマンドになる(string arg)
     {
         Assert.Equal("version", CliArgs.Parse(new[] { arg }).Command);
     }
 
-    [Fact]
-    public void コマンド後のバージョンフラグもversionになる()
+    [Theory]
+    [InlineData("--version")]
+    [InlineData("-v")]
+    public void コマンド後のバージョンフラグもversionになる(string arg)
     {
-        Assert.Equal("version", CliArgs.Parse(new[] { "doctor", "--version" }).Command);
+        Assert.Equal("version", CliArgs.Parse(new[] { "doctor", arg }).Command);
     }
 
     [Fact]
@@ -62,10 +65,20 @@ public class CliArgsTests
         Assert.Throws<ArgumentException>(() => CliArgs.Parse(new[] { "explain", "2", "--lang" }));
     }
 
-    [Fact]
-    public void 不明なフラグは例外()
+    [Theory]
+    [InlineData("--unknown")]
+    [InlineData("-x")]
+    [InlineData("-json")]
+    public void 不明なフラグは例外(string flag)
     {
-        Assert.Throws<ArgumentException>(() => CliArgs.Parse(new[] { "doctor", "--unknown" }));
+        // 短縮形を位置引数として拾うと、綴り間違いが黙ってタスク名として扱われる
+        Assert.Throws<ArgumentException>(() => CliArgs.Parse(new[] { "doctor", flag }));
+    }
+
+    [Fact]
+    public void ハイフン1文字は位置引数として扱う()
+    {
+        Assert.Equal("-", CliArgs.Parse(new[] { "doctor", "-" }).Positional);
     }
 
     [Fact]
