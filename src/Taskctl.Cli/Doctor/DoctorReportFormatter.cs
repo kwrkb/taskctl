@@ -21,7 +21,11 @@ internal static class DoctorReportFormatter
             ? DataStore.GetRegistry().Meta.Severities.ToHashSet()
             : new HashSet<string> { "warning", "error" };
 
-        var problem = results.Where(r => r.AcquireError is not null || r.AllFindings().Any(f => shown.Contains(f.Severity))).ToList();
+        // 深掘り時は一覧を出さないため、所見が無いタスクも必ず見せる。
+        // 落とすと「そんなタスクは無い / 何も診断されなかった」と区別がつかなくなる。
+        var problem = deepDive
+            ? results
+            : results.Where(r => r.AcquireError is not null || r.AllFindings().Any(f => shown.Contains(f.Severity))).ToList();
         var severities = results.SelectMany(r => r.AllFindings()).Select(f => f.Severity).ToList();
         int total = results.Count;
         int errors = severities.Count(s => s == "error");
@@ -57,13 +61,21 @@ internal static class DoctorReportFormatter
                 sb.Append(Indent(FormatRawSetting(r.Model, r.Info, locale), 0)).Append('\n');
             }
 
-            foreach (ISeverityFinding f in r.AllFindings().Where(f => shown.Contains(f.Severity)))
+            var visible = r.AllFindings().Where(f => shown.Contains(f.Severity)).ToList();
+            foreach (ISeverityFinding f in visible)
             {
                 var text = f is Finding finding
                     ? FindingFormatter.Format(finding, locale)
                     : RuleFindingFormatter.Format((RuleFinding)f, locale);
                 sb.Append(Indent(text, 2)).Append('\n');
                 sb.Append('\n');
+            }
+
+            if (visible.Count == 0 && r.AcquireError is null)
+            {
+                sb.Append(locale == "ja"
+                    ? "  問題は見つかりませんでした。\n\n"
+                    : "  No problems found.\n\n");
             }
         }
 

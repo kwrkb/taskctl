@@ -40,7 +40,7 @@ public class DoctorCommandTests
 
     private static AcquiredTask NewAcquired(
         string fixture, string name, string state = "Ready",
-        long lastTaskResult = 0,
+        long? lastTaskResult = 0,
         DateTime? lastRunTime = null, DateTime? nextRunTime = null,
         string? acquireError = null)
     {
@@ -148,6 +148,36 @@ public class DoctorCommandTests
         var (text, _) = RunText(new CliArgs { Command = "doctor", Lang = "ja", Positional = "HealthyTask" }, new FakeAcquirer(acq));
         Assert.Contains("S_OK", text);
         Assert.Contains("正常終了", text);
+    }
+
+    [Fact]
+    public void 所見が無くても深掘りならタスクのヘッダーを出す()
+    {
+        var acq = NewAcquired("normal.xml", "HealthyTask", lastTaskResult: null);
+        var (text, exit) = RunText(new CliArgs { Command = "doctor", Lang = "ja", Positional = "HealthyTask" }, new FakeAcquirer(acq));
+        Assert.Equal(0, exit);
+        Assert.Contains("=== \\HealthyTask", text);
+        Assert.Contains("問題は見つかりませんでした", text);
+    }
+
+    [Fact]
+    public void 所見が無くても深掘りのverboseなら生の設定を出す()
+    {
+        var acq = NewAcquired("normal.xml", "HealthyTask", lastTaskResult: null);
+        var (text, _) = RunText(
+            new CliArgs { Command = "doctor", Lang = "ja", Positional = "HealthyTask", Verbose = true },
+            new FakeAcquirer(acq));
+        Assert.Contains("生の設定", text);
+        Assert.Contains("powershell.exe", text);
+    }
+
+    [Fact]
+    public void 所見が無いタスクは走査時には本文に出さない()
+    {
+        var acq = NewAcquired("normal.xml", "HealthyTask", lastTaskResult: null);
+        var (text, _) = RunText(new CliArgs { Command = "doctor", Lang = "ja" }, new FakeAcquirer(acq));
+        Assert.DoesNotContain("=== \\HealthyTask", text);
+        Assert.Contains("--- 一覧 ---", text);
     }
 
     [Fact]
