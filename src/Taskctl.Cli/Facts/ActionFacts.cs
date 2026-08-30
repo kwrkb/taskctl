@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Taskctl.Model;
 
 namespace Taskctl.Facts;
@@ -8,6 +8,10 @@ internal static partial class ActionFacts
 {
     private static readonly string[] ProfileVars =
         { "%USERPROFILE%", "%APPDATA%", "%LOCALAPPDATA%", "%TEMP%", "%TMP%", "%HOMEDRIVE%", "%HOMEPATH%", "%ONEDRIVE%" };
+
+    // Command に直接指定すると既定の関連付け依存になり失敗しやすい拡張子。
+    private static readonly HashSet<string> UnlaunchableScriptExtensions =
+        new(StringComparer.OrdinalIgnoreCase) { ".ps1", ".psm1", ".sh" };
 
     [GeneratedRegex(@"^[A-Za-z]:[\\/]")]
     private static partial Regex RootedDriveRegex();
@@ -109,8 +113,10 @@ internal static partial class ActionFacts
                 PowerShellArgRegex().IsMatch(arguments) || Ps1Regex().IsMatch(arguments);
         }
 
+        // 拡張子は大文字小文字を区別しない（v1 の -in 演算子と同じ挙動）
         var ext = Path.GetExtension(command);
-        facts["action.command_is_unlaunchable_script"] = ext is ".ps1" or ".psm1" or ".sh";
+        facts["action.command_is_unlaunchable_script"] =
+            UnlaunchableScriptExtensions.Contains(ext);
 
         return facts;
     }
