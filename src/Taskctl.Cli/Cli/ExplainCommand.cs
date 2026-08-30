@@ -1,4 +1,4 @@
-using System.Text.Encodings.Web;
+﻿using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Taskctl.Codes;
@@ -44,7 +44,7 @@ internal static class ExplainCommand
         var text = FindingFormatter.Format(finding, locale);
         Console.Out.WriteLine(text);
 
-        var hint = ConsoleEncoding.GetEncodingHint(locale);
+        var hint = ConsoleEncoding.GetEncodingHint(locale, "explain <code>");
         if (hint is not null)
         {
             Console.Out.WriteLine();
