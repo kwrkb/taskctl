@@ -1,4 +1,4 @@
-using System.Text.Encodings.Web;
+﻿using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Taskctl.Acquisition;
@@ -74,7 +74,7 @@ internal static class DoctorCommand
         var text = DoctorReportFormatter.Format(results, locale, deepDive, args.Verbose);
         Console.Out.WriteLine(text);
 
-        var hint = ConsoleEncoding.GetEncodingHint(locale);
+        var hint = ConsoleEncoding.GetEncodingHint(locale, "doctor");
         if (hint is not null)
         {
             Console.Out.WriteLine();
