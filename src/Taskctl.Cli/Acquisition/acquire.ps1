@@ -48,8 +48,17 @@ try {
             $found = @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -eq $leaf })
         }
         if ($TaskNameArg -match '[\\/]') {
-            $wanted = '\' + $TaskNameArg.Trim('\', '/')
-            $found = @($found | Where-Object { ($_.TaskPath + $_.TaskName).TrimEnd('\') -eq $wanted })
+            # "/" 区切りでも指定しうるので "\" に寄せる
+            $wanted = '\' + ($TaskNameArg -replace '/', '\').Trim('\')
+            # ワイルドカードを含む指定（\Microsoft\* など）は -like で照合する。
+            # 含まない時は -eq のまま: タスク名に使える "[" を文字クラスと
+            # 解釈させないため（リテラル名の完全一致を壊さない）。
+            $found = if ($wanted -match '[*?]') {
+                @($found | Where-Object { ($_.TaskPath + $_.TaskName).TrimEnd('\') -like $wanted })
+            }
+            else {
+                @($found | Where-Object { ($_.TaskPath + $_.TaskName).TrimEnd('\') -eq $wanted })
+            }
         }
         if (-not $found) {
             throw "タスクが見つかりません: $TaskNameArg"
