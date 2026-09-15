@@ -66,6 +66,26 @@ public partial class DataCoverageTests
     [Theory]
     [InlineData("ja")]
     [InlineData("en")]
+    public void rulesのキー集合がrules_yamlと一致する(string locale)
+    {
+        // 検出ルールを追加して片方の言語のカタログに書き忘れる、あるいはルールを消して
+        // プロースだけ残す、のどちらもここで落とす（codes と同じ双方向一致）。
+        var ruleIds = DataStore.GetRules().Rules.Select(r => r.Id).ToHashSet();
+        var catKeys = DataStore.GetCatalog(locale).Rules.Keys.ToHashSet();
+        Assert.True(ruleIds.SetEquals(catKeys),
+            $"差分: rules-only={string.Join(",", ruleIds.Except(catKeys))} / catalog-only={string.Join(",", catKeys.Except(ruleIds))}");
+    }
+
+    [Fact]
+    public void ルールのidに重複がない()
+    {
+        var ids = DataStore.GetRules().Rules.Select(r => r.Id).ToList();
+        Assert.Equal(ids.Count, ids.Distinct().Count());
+    }
+
+    [Theory]
+    [InlineData("ja")]
+    [InlineData("en")]
     public void 全コードにmeaningとnextがあり空文字が無い(string locale)
     {
         var cat = DataStore.GetCatalog(locale);

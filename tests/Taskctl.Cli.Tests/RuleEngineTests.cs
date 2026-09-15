@@ -139,6 +139,8 @@ public class RuleEngineTests
         Assert.DoesNotContain("stale_last_run", GetIds("normal.xml", info));
     }
 
+    // キー集合そのものの双方向一致は DataCoverageTests（rulesのキー集合がrules_yamlと一致する）。
+    // ここでは中身が空でないことだけを見る。
     [Fact]
     public void 全ルールIDにjaとenのプロースがある()
     {
@@ -151,20 +153,6 @@ public class RuleEngineTests
                 Assert.True(cat.Rules.TryGetValue(id, out var prose), $"{locale} に {id} が無い");
                 Assert.False(string.IsNullOrWhiteSpace(prose!.Meaning), $"{locale} の {id}.meaning");
                 Assert.False(string.IsNullOrWhiteSpace(prose.Next), $"{locale} の {id}.next");
-            }
-        }
-    }
-
-    [Fact]
-    public void カタログに存在しないルールIDのプロースが残っていない()
-    {
-        var ids = DataStore.GetRules().Rules.Select(r => r.Id).ToHashSet();
-        foreach (var locale in new[] { "ja", "en" })
-        {
-            var cat = DataStore.GetCatalog(locale);
-            foreach (var key in cat.Rules.Keys)
-            {
-                Assert.Contains(key, ids);
             }
         }
     }
