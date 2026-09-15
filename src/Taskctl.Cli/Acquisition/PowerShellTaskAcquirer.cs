@@ -92,8 +92,14 @@ internal sealed class PowerShellTaskAcquirer : ITaskAcquirer
         }
         finally
         {
-            try { File.Delete(outFile); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            TryDelete(outFile);
+            TryDelete(scriptPath);
         }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { File.Delete(path); } catch (IOException) { } catch (UnauthorizedAccessException) { }
     }
 
     private static AcquiredTask ToAcquiredTask(RawAcquiredTask raw)
@@ -155,22 +161,22 @@ internal sealed class PowerShellTaskAcquirer : ITaskAcquirer
     }
 
     // 埋込スクリプトを一時ファイルへ展開する（プロセス起動には実ファイルパスが要る）。
-    // プロセス単位でキャッシュし、複数回の Acquire 呼び出しでも再展開しない。
-    private static string? _cachedScriptPath;
-
-    private static string ExtractScript()
+    // 固定名 (taskctl-acquire.ps1) だと、共有 TEMP で別ユーザー・並行プロセスと衝突し、
+    // 書き込みロック (IOException) や他ユーザー所有ファイルの上書き失敗
+    // (UnauthorizedAccessException) を起こす。outFile と同じく呼び出しごとに
+    // 一意な名前へ展開し、使い終えたら消す。
+    internal static string ExtractScript()
     {
-        if (_cachedScriptPath is not null && File.Exists(_cachedScriptPath)) return _cachedScriptPath;
-
         var asm = typeof(PowerShellTaskAcquirer).Assembly;
         using var stream = asm.GetManifestResourceStream("acquire.ps1")
             ?? throw new InvalidOperationException("埋込リソースが見つかりません: acquire.ps1");
         using var reader = new StreamReader(stream, System.Text.Encoding.UTF8);
         var content = reader.ReadToEnd();
 
-        var path = Path.Combine(Path.GetTempPath(), "taskctl-acquire.ps1");
+        var path = Path.Combine(
+            Path.GetTempPath(),
+            $"taskctl-acquire-{Environment.ProcessId}-{Guid.NewGuid():N}.ps1");
         File.WriteAllText(path, content, new System.Text.UTF8Encoding(false));
-        _cachedScriptPath = path;
         return path;
     }
 }
