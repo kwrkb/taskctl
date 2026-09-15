@@ -48,4 +48,27 @@ public class TaskFactsTests
         var facts = ActionFacts.Compute(action, NoDrives, NoDrives, NoDrives);
         Assert.Equal(false, facts["action.uses_profile_variable"]);
     }
+
+    [Theory]
+    [InlineData("C:\\tools\\run.ps1")]
+    [InlineData("C:\\tools\\run.PS1")]
+    [InlineData("C:\\tools\\run.Ps1")]
+    [InlineData("C:\\tools\\mod.PSM1")]
+    [InlineData("C:\\tools\\run.SH")]
+    public void 直接起動できないスクリプト拡張子の判定は大文字小文字を区別しない(string command)
+    {
+        var action = new ActionModel { Type = "Exec", Command = command };
+        var facts = ActionFacts.Compute(action, NoDrives, NoDrives, NoDrives);
+        Assert.Equal(true, facts["action.command_is_unlaunchable_script"]);
+    }
+
+    [Theory]
+    [InlineData("C:\\tools\\app.exe")]
+    [InlineData("C:\\tools\\run.CMD")]
+    public void 直接起動できるコマンドはスクリプト扱いしない(string command)
+    {
+        var action = new ActionModel { Type = "Exec", Command = command };
+        var facts = ActionFacts.Compute(action, NoDrives, NoDrives, NoDrives);
+        Assert.Equal(false, facts["action.command_is_unlaunchable_script"]);
+    }
 }
