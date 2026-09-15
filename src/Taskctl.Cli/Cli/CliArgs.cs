@@ -65,7 +65,9 @@ internal sealed class CliArgs
             }
             // 未知のフラグは "--" だけでなく "-x" のような短縮形も弾く。
             // 位置引数として拾うと、綴り間違いがタスク名として扱われ黙って的外れな結果になる。
-            else if (a.Length > 1 && a.StartsWith('-'))
+            // explain の負数は結果コード。形式・範囲の検証は ResultCode.Parse に任せる。
+            else if (a.Length > 1 && a.StartsWith('-')
+                && !(command == "explain" && a[1] is >= '0' and <= '9'))
             {
                 throw new ArgumentException($"不明なフラグです: {a}");
             }

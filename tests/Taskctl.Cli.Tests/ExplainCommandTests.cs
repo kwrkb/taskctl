@@ -63,6 +63,21 @@ public class ExplainCommandTests
         Assert.Contains("ERROR_FILE_NOT_FOUND", stdout);
     }
 
+    [Theory]
+    [InlineData("-2147024891", "0x80070005")]
+    [InlineData("-2147483648", "0x80000000")]
+    [InlineData("-1", "0xFFFFFFFF")]
+    [InlineData("-0x1", "0xFFFFFFFF")]
+    public void NegativeCodeThroughArgumentParser(string code, string expected)
+    {
+        var args = CliArgs.Parse(new[] { "explain", "--lang", "en", code, "--json" });
+        var (stdout, stderr, exit) = Run(args);
+        Assert.Equal(0, exit);
+        Assert.Empty(stderr);
+        using var json = JsonDocument.Parse(stdout);
+        Assert.Equal(expected, json.RootElement.GetProperty("code").GetString());
+    }
+
     [Fact]
     public void 解釈できないコードでも落ちずに終了コード0()
     {

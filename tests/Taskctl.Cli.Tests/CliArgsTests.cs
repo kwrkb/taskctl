@@ -73,6 +73,7 @@ public class CliArgsTests
     {
         // 短縮形を位置引数として拾うと、綴り間違いが黙ってタスク名として扱われる
         Assert.Throws<ArgumentException>(() => CliArgs.Parse(new[] { "doctor", flag }));
+        Assert.Throws<ArgumentException>(() => CliArgs.Parse(new[] { "explain", flag }));
     }
 
     [Fact]
